@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Mirqab — وحدة صوتية</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:    #00e05a;
+      --green-dim:#00802e;
+      --green-bg: #00e05a18;
+      --red:      #ff4444;
+      --yellow:   #ffd700;
+      --cyan:     #00d4ff;
+      --cyan-dim: #008fa8;
+      --cyan-bg:  #00d4ff18;
+      --bg:       #060b0b;
+      --bg2:      #0b1212;
+      --bg3:      #111919;
+      --border:   #1a2e2e;
+      --text:     #b8d4d4;
+      --text-dim: #5a7a7a;
+      --font:     'Courier New', 'Lucida Console', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none; z-index: 9999;
+    }
+
+    /* ── TOP BAR ── */
+    #topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 44px; padding: 0 16px;
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #topbar .brand {
+      font-size: 15px; font-weight: bold; letter-spacing: 4px;
+      color: var(--cyan); text-shadow: 0 0 8px var(--cyan);
+    }
+    #topbar .brand span { color: var(--text-dim); font-size: 11px; letter-spacing: 2px; }
+    #topbar .status-bar { display: flex; align-items: center; gap: 20px; font-size: 11px; color: var(--text-dim); }
+    .conn-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--red); margin-left: 6px;
+      box-shadow: 0 0 6px var(--red); transition: all 0.3s;
+    }
+    .conn-dot.online { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); animation: pulse 2s infinite; }
+    #clock { color: var(--cyan); letter-spacing: 2px; font-size: 12px; }
+
+    @keyframes pulse  { 0%,100%{ opacity:1 } 50%{ opacity:0.4 } }
+    @keyframes blink  { 0%,100%{ opacity:1 } 50%{ opacity:0 } }
+    @keyframes scanh  {
+      0%   { top: -4px; }
+      100% { top: 100%; }
+    }
+
+    /* ── LAYOUT ── */
+    #shell { display: flex; height: calc(100vh - 44px); overflow: hidden; }
+
+    /* ── LEFT: AUDIO PANEL ── */
+    #audio-panel {
+      flex: 1 1 0; display: flex; flex-direction: column;
+      border-right: 1px solid var(--border); min-width: 0;
+    }
+    #audio-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; background: var(--bg2);
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    #audio-header .label { color: var(--cyan-dim); font-size: 10px; letter-spacing: 3px; text-transform: uppercase; }
+    #mic-status { font-size: 10px; }
+    #mic-status.live { color: var(--cyan); animation: blink 1s infinite; }
+    #mic-status.idle { color: var(--text-dim); }
+
+    #viz-wrapper {
+      flex: 1; position: relative; background: #000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+
+    /* scan line */
+    #viz-wrapper::before {
+      content: '';
+      position: absolute; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent 0%, var(--cyan) 50%, transparent 100%);
+      opacity: 0.15; pointer-events: none;
+      animation: scanh 4s linear infinite;
+    }
+
+    /* corner brackets */
+    .corner {
+      position: absolute; width: 20px; height: 20px;
+      border-color: var(--cyan); border-style: solid; opacity: 0.35;
+    }
+    .corner.tl { top:12px; right:12px; border-width: 2px 0 0 2px; }
+    .corner.tr { top:12px; left:12px;  border-width: 2px 2px 0 0; }
+    .corner.bl { bottom:12px; right:12px; border-width: 0 0 2px 2px; }
+    .corner.br { bottom:12px; left:12px; border-width: 0 2px 2px 0; }
+
+    #no-mic {
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      color: var(--text-dim); text-align: center; position: relative; z-index: 1;
+    }
+    #no-mic.hidden { display: none; }
+    #no-mic svg { opacity: 0.2; }
+    #no-mic p { font-size: 11px; letter-spacing: 2px; }
+
+    /* waveform canvas */
+    #waveform-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      display: none;
+    }
+    #waveform-canvas.active { display: block; }
+
+    /* spectrum bars */
+    #spectrum-canvas {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 30%; width: 100%; display: none; opacity: 0.5;
+    }
+    #spectrum-canvas.active { display: block; }
+
+    /* HUD overlays */
+    #hud-info {
+      position: absolute; top: 10px; right: 12px;
+      font-size: 10px; color: var(--cyan); letter-spacing: 1px;
+      line-height: 1.8; pointer-events: none; opacity: 0.7;
+      display: none;
+    }
+    #hud-info.active { display: block; }
+
+    #hud-tx-badge {
+      position: absolute; bottom: 12px; left: 12px;
+      background: rgba(0,212,255,0.1); border: 1px solid var(--cyan);
+      color: var(--cyan); font-size: 10px; letter-spacing: 3px; padding: 3px 8px;
+      display: none; animation: blink 0.8s infinite;
+    }
+    #hud-tx-badge.active { display: block; }
+
+    /* dB meter bar */
+    #db-bar-wrap {
+      position: absolute; left: 12px; top: 12px; bottom: 12px;
+      width: 10px; display: none; flex-direction: column-reverse;
+    }
+    #db-bar-wrap.active { display: flex; }
+    #db-bar {
+      width: 100%; background: var(--cyan);
+      transition: height 0.05s;
+      box-shadow: 0 0 6px var(--cyan);
+    }
+    #db-bar-track {
+      position: absolute; inset: 0;
+      border: 1px solid rgba(0,212,255,0.15);
+    }
+
+    /* ── RIGHT: CONTROLS PANEL ── */
+    #ctrl-panel {
+      width: 300px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      background: var(--bg2); overflow: hidden;
+    }
+
+    .section { border-bottom: 1px solid var(--border); padding: 12px 14px; flex-shrink: 0; }
+    .section-title {
+      font-size: 9px; letter-spacing: 3px; color: var(--text-dim);
+      text-transform: uppercase; margin-bottom: 10px;
+    }
+
+    /* Unit selector */
+    .unit-options { display: flex; flex-direction: column; gap: 6px; }
+    .unit-opt {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; border: 1px solid var(--border);
+      background: transparent; color: var(--text);
+      cursor: pointer; font-family: var(--font); font-size: 12px;
+      transition: all 0.15s; letter-spacing: 1px;
+      text-align: right; width: 100%;
+    }
+    .unit-opt:hover { border-color: var(--cyan-dim); color: var(--cyan); }
+    .unit-opt.selected { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-bg); }
+    .unit-opt .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      border: 1px solid currentColor; flex-shrink: 0; margin-right: auto;
+    }
+    .unit-opt.selected .dot { background: currentColor; }
+
+    /* Unit loading / empty states */
+    .unit-loading {
+      font-size: 10px; color: var(--text-dim); letter-spacing: 2px;
+      padding: 6px 0; text-align: center;
+    }
+
+    /* Register unit section */
+    .reg-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none;
+      font-size: 9px; letter-spacing: 3px; color: var(--text-dim);
+      text-transform: uppercase; margin-bottom: 0;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .reg-toggle:hover { color: var(--cyan); }
+    .reg-toggle .arrow {
+      font-size: 9px; transition: transform 0.2s;
+    }
+    .reg-toggle.open .arrow { transform: rotate(90deg); }
+
+    .reg-form {
+      display: none;
+      flex-direction: column;
+      gap: 7px;
+      padding: 10px 14px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg3);
+      flex-shrink: 0;
+    }
+    .reg-form.open { display: flex; }
+
+    .reg-field {
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .reg-field label {
+      font-size: 9px; letter-spacing: 2px; color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .reg-field input {
+      background: var(--bg2); color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 8px; font-family: var(--font); font-size: 11px;
+      outline: none; transition: border-color 0.15s; width: 100%;
+    }
+    .reg-field input:focus { border-color: var(--cyan-dim); }
+    .reg-field input::placeholder { color: var(--text-dim); opacity: 0.6; }
+
+    .reg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+
+    .btn-reg {
+      padding: 8px; border: 1px solid var(--cyan);
+      background: transparent; color: var(--cyan);
+      cursor: pointer; font-family: var(--font); font-size: 11px;
+      letter-spacing: 2px; transition: all 0.15s; width: 100%;
+      margin-top: 2px;
+    }
+    .btn-reg:hover:not(:disabled) { background: var(--cyan-bg); }
+    .btn-reg:disabled { opacity: 0.3; cursor: not-allowed; }
+    .reg-status {
+      font-size: 10px; letter-spacing: 1px; min-height: 16px;
+      text-align: center;
+    }
+    .reg-status.ok  { color: var(--cyan); }
+    .reg-status.err { color: var(--red); }
+
+    /* Detection type */
+    .det-options { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .det-opt {
+      padding: 6px 4px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-dim);
+      cursor: pointer; font-family: var(--font); font-size: 10px;
+      transition: all 0.15s; text-align: center; letter-spacing: 1px;
+    }
+    .det-opt:hover { border-color: var(--cyan-dim); color: var(--text); }
+    .det-opt.selected { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-bg); }
+
+    /* Confidence slider */
+    .slider-row { display: flex; align-items: center; gap: 10px; }
+    input[type=range] {
+      flex: 1; accent-color: var(--cyan);
+      height: 3px; cursor: pointer;
+    }
+    .slider-val { color: var(--cyan); font-size: 12px; min-width: 40px; text-align: left; }
+
+    /* Interval */
+    .interval-row { display: flex; gap: 5px; flex-wrap: wrap; }
+    .iv-btn {
+      padding: 4px 10px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-dim);
+      cursor: pointer; font-family: var(--font); font-size: 10px;
+      transition: all 0.15s;
+    }
+    .iv-btn:hover { border-color: var(--cyan-dim); color: var(--text); }
+    .iv-btn.selected { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-bg); }
+    .iv-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* Buttons */
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+    .btn {
+      padding: 9px 6px; border: 1px solid;
+      background: transparent; cursor: pointer;
+      font-family: var(--font); font-size: 11px;
+      letter-spacing: 1px; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-cyan  { border-color: var(--cyan); color: var(--cyan); }
+    .btn-cyan:not(:disabled):hover { background: var(--cyan-bg); }
+    .btn-dim   { border-color: var(--border); color: var(--text-dim); }
+    .btn-dim:not(:disabled):hover { border-color: var(--text-dim); color: var(--text); }
+    .btn-red   { border-color: var(--red); color: var(--red); }
+    .btn-red:not(:disabled):hover { background: rgba(255,68,68,0.1); }
+    .btn-full  { width: 100%; margin-bottom: 6px; padding: 8px; }
+
+    /* Event log */
+    #log-panel {
+      flex: 1; display: flex; flex-direction: column;
+      border-top: 1px solid var(--border); overflow: hidden; min-height: 0;
+    }
+    #log-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 14px; flex-shrink: 0;
+    }
+    #log-header .lbl { font-size: 9px; letter-spacing: 3px; color: var(--text-dim); }
+    #log-header .cnt { font-size: 10px; color: var(--cyan); }
+    #log-body {
+      flex: 1; overflow-y: auto; padding: 0 14px 10px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    #log-body::-webkit-scrollbar { width: 4px; }
+    #log-body::-webkit-scrollbar-thumb { background: var(--border); }
+    .log-entry {
+      display: flex; gap: 8px; font-size: 10px; line-height: 1.5;
+      border-right: 2px solid var(--border); padding-right: 6px;
+    }
+    .log-entry.ok  { border-right-color: var(--cyan); }
+    .log-entry.err { border-right-color: var(--red); color: var(--red); }
+    .log-ts  { color: var(--text-dim); flex-shrink: 0; }
+    .log-msg { flex: 1; }
+    #log-empty { color: var(--text-dim); font-size: 10px; letter-spacing: 2px; padding-top: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="brand">
+    MIRQAB &nbsp;<span>// ACOUSTIC FIELD UNIT</span>
+  </div>
+  <div class="status-bar">
+    <span>
+      <span class="conn-dot" id="conn-dot"></span>
+      <span id="conn-label">CONNECTING...</span>
+    </span>
+    <span id="unit-badge" style="color:var(--cyan);letter-spacing:2px;">—</span>
+    <span id="clock">00:00:00</span>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div id="shell">
+
+  <!-- AUDIO VIZ PANEL -->
+  <div id="audio-panel">
+    <div id="audio-header">
+      <span class="label">AUDIO MONITOR</span>
+      <span id="mic-status" class="idle">● IDLE</span>
+    </div>
+    <div id="viz-wrapper">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+
+      <div id="no-mic">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <rect x="9" y="2" width="6" height="12" rx="3"/>
+          <path d="M5 10a7 7 0 0 0 14 0"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="8"  y1="22" x2="16" y2="22"/>
+        </svg>
+        <p>NO MICROPHONE ACTIVE</p>
+        <p style="font-size:10px;opacity:0.5;">CLICK START MIC TO BEGIN CAPTURE</p>
+      </div>
+
+      <canvas id="waveform-canvas"></canvas>
+      <canvas id="spectrum-canvas"></canvas>
+
+      <div id="hud-info"></div>
+      <div id="hud-tx-badge">TX ●</div>
+
+      <!-- dB level bar -->
+      <div id="db-bar-wrap">
+        <div id="db-bar-track"></div>
+        <div id="db-bar" style="height:0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTROLS PANEL -->
+  <div id="ctrl-panel">
+
+    <!-- UNIT SELECT -->
+    <div class="section">
+      <div class="section-title">UNIT SELECT</div>
+      <div class="unit-options" id="unit-options">
+        <div class="unit-loading">[ LOADING UNITS... ]</div>
+      </div>
+    </div>
+
+    <!-- REGISTER UNIT (collapsible) -->
+    <div class="reg-toggle" id="reg-toggle">
+      <span>REGISTER UNIT</span>
+      <span class="arrow">&#9654;</span>
+    </div>
+    <div class="reg-form" id="reg-form">
+      <div class="reg-field">
+        <label>Unit ID</label>
+        <input type="text" id="reg-unit-id" placeholder="acoustic-03" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="reg-field">
+        <label>Name</label>
+        <input type="text" id="reg-name" placeholder="ACOUSTIC-03 | المنطقة الشمالية" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="reg-row">
+        <div class="reg-field">
+          <label>Lat</label>
+          <input type="number" id="reg-lat" placeholder="24.7136" step="any" />
+        </div>
+        <div class="reg-field">
+          <label>Lng</label>
+          <input type="number" id="reg-lng" placeholder="46.7753" step="any" />
+        </div>
+      </div>
+      <button class="btn-reg" id="btn-register">+ REGISTER</button>
+      <div class="reg-status" id="reg-status"></div>
+    </div>
+
+    <!-- MIC CONTROL -->
+    <div class="section">
+      <div class="section-title">MICROPHONE</div>
+      <div class="btn-row">
+        <button class="btn btn-cyan" id="btn-mic-on">&#9654; START MIC</button>
+        <button class="btn btn-dim"  id="btn-mic-off" disabled>&#9632; STOP</button>
+      </div>
+      <div id="mic-error" style="color:var(--red);font-size:10px;display:none;padding-top:4px;"></div>
+    </div>
+
+    <!-- DETECTION TYPE -->
+    <div class="section">
+      <div class="section-title">DETECTION TYPE</div>
+      <div class="det-options" id="det-options">
+        <button class="det-opt selected" data-label="uav"      data-sev="high">UAV</button>
+        <button class="det-opt"          data-label="aircraft" data-sev="medium">AIRCRAFT</button>
+      </div>
+    </div>
+
+    <!-- CONFIDENCE -->
+    <div class="section">
+      <div class="section-title">CONFIDENCE</div>
+      <div class="slider-row">
+        <input type="range" id="conf-slider" min="50" max="99" value="82" step="1" />
+        <span class="slider-val" id="conf-val">0.82</span>
+      </div>
+    </div>
+
+    <!-- SEND INTERVAL -->
+    <div class="section">
+      <div class="section-title">SEND INTERVAL</div>
+      <div class="interval-row" id="interval-row">
+        <button class="iv-btn" data-sec="5">5s</button>
+        <button class="iv-btn selected" data-sec="10">10s</button>
+        <button class="iv-btn" data-sec="30">30s</button>
+        <button class="iv-btn" data-sec="60">60s</button>
+      </div>
+    </div>
+
+    <!-- TRANSMIT -->
+    <div class="section">
+      <div class="section-title">TRANSMIT</div>
+      <div class="btn-row">
+        <button class="btn btn-cyan" id="btn-send-on">&#9654; START TX</button>
+        <button class="btn btn-red"  id="btn-send-off" disabled>&#9632; STOP TX</button>
+      </div>
+      <button class="btn btn-dim btn-full" id="btn-send-one">SEND SINGLE DETECTION</button>
+    </div>
+
+    <!-- LOG -->
+    <div id="log-panel">
+      <div id="log-header">
+        <span class="lbl">EVENT LOG</span>
+        <span class="cnt" id="log-count">0</span>
+      </div>
+      <div id="log-body">
+        <div id="log-empty">[ NO EVENTS ]</div>
+      </div>
+    </div>
+
+  </div><!-- /ctrl-panel -->
+</div><!-- /shell -->
+
+<script>
+  // ── state ──────────────────────────────────────────────────────────────────
+  let selectedUnit  = null
+  let selectedLabel = { label: 'uav', severity: 'high' }
+  let intervalSec   = 10
+  let micStream     = null
+  let sendTimer     = null
+  let logCount      = 0
+  let audioCtx      = null
+  let analyser      = null
+  let animFrame     = null
+  let baseConf      = 0.82
+
+  // ── clock ──────────────────────────────────────────────────────────────────
+  function updateClock() {
+    const now = new Date()
+    document.getElementById('clock').textContent =
+      now.toLocaleTimeString('en-GB', { hour12: false })
+  }
+  updateClock(); setInterval(updateClock, 1000)
+
+  // ── backend connectivity ───────────────────────────────────────────────────
+  async function checkConn() {
+    try { const r = await fetch('/health'); setConn(r.ok) }
+    catch { setConn(false) }
+  }
+  function setConn(ok) {
+    document.getElementById('conn-dot').className = 'conn-dot' + (ok ? ' online' : '')
+    document.getElementById('conn-label').textContent = ok ? 'HQ CONNECTED' : 'HQ OFFLINE'
+  }
+  checkConn(); setInterval(checkConn, 8000)
+
+  // ── unit badge ─────────────────────────────────────────────────────────────
+  function updateUnitBadge() {
+    document.getElementById('unit-badge').textContent =
+      selectedUnit ? selectedUnit.id.toUpperCase() : '—'
+  }
+  updateUnitBadge()
+
+  // ── confidence slider ──────────────────────────────────────────────────────
+  const confSlider = document.getElementById('conf-slider')
+  const confVal    = document.getElementById('conf-val')
+  confSlider.addEventListener('input', () => {
+    baseConf = confSlider.value / 100
+    confVal.textContent = baseConf.toFixed(2)
+  })
+
+  // ── unit list ──────────────────────────────────────────────────────────────
+  async function loadUnits(autoSelectId) {
+    const container = document.getElementById('unit-options')
+    try {
+      const res = await fetch('/api/units')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const all = await res.json()
+      const units = all.filter(u => u.unit_type === 'acoustic')
+
+      container.innerHTML = ''
+
+      if (units.length === 0) {
+        container.innerHTML = '<div class="unit-loading">[ NO ACOUSTIC UNITS ]</div>'
+        selectedUnit = null
+        updateUnitBadge()
+        return
+      }
+
+      units.forEach((u, i) => {
+        const btn = document.createElement('button')
+        btn.className = 'unit-opt'
+        btn.dataset.id  = u.unit_id
+        btn.dataset.lat = u.lat
+        btn.dataset.lng = u.lng
+        btn.innerHTML = `<div class="dot"></div>${u.name || u.unit_id}`
+
+        const shouldSelect = autoSelectId
+          ? u.unit_id === autoSelectId
+          : i === 0
+
+        if (shouldSelect) {
+          btn.classList.add('selected')
+          selectedUnit = { id: u.unit_id, lat: +u.lat, lng: +u.lng }
+          updateUnitBadge()
+        }
+
+        container.appendChild(btn)
+      })
+
+      // If autoSelectId was provided but not found, fall back to first
+      if (autoSelectId && !selectedUnit) {
+        const first = container.querySelector('.unit-opt')
+        if (first) {
+          first.classList.add('selected')
+          selectedUnit = { id: first.dataset.id, lat: +first.dataset.lat, lng: +first.dataset.lng }
+          updateUnitBadge()
+        }
+      }
+    } catch (err) {
+      container.innerHTML = '<div class="unit-loading" style="color:var(--red)">[ LOAD FAILED ]</div>'
+      addLog(false, `UNIT LOAD ERROR: ${err.message}`)
+    }
+  }
+
+  // ── unit selector (delegated) ──────────────────────────────────────────────
+  document.getElementById('unit-options').addEventListener('click', e => {
+    const btn = e.target.closest('.unit-opt')
+    if (!btn) return
+    document.querySelectorAll('.unit-opt').forEach(b => b.classList.remove('selected'))
+    btn.classList.add('selected')
+    selectedUnit = { id: btn.dataset.id, lat: +btn.dataset.lat, lng: +btn.dataset.lng }
+    updateUnitBadge()
+  })
+
+  // ── register unit ──────────────────────────────────────────────────────────
+  const regToggle = document.getElementById('reg-toggle')
+  const regForm   = document.getElementById('reg-form')
+
+  regToggle.addEventListener('click', () => {
+    const open = regForm.classList.toggle('open')
+    regToggle.classList.toggle('open', open)
+  })
+
+  document.getElementById('btn-register').addEventListener('click', async () => {
+    const unitId = document.getElementById('reg-unit-id').value.trim()
+    const name   = document.getElementById('reg-name').value.trim()
+    const lat    = parseFloat(document.getElementById('reg-lat').value)
+    const lng    = parseFloat(document.getElementById('reg-lng').value)
+    const status = document.getElementById('reg-status')
+
+    if (!unitId) { status.className = 'reg-status err'; status.textContent = 'UNIT ID REQUIRED'; return }
+    if (!name)   { status.className = 'reg-status err'; status.textContent = 'NAME REQUIRED'; return }
+    if (isNaN(lat) || isNaN(lng)) { status.className = 'reg-status err'; status.textContent = 'VALID LAT/LNG REQUIRED'; return }
+
+    const btn = document.getElementById('btn-register')
+    btn.disabled = true
+    status.className = 'reg-status'
+    status.textContent = 'REGISTERING...'
+
+    try {
+      const res = await fetch('/api/units', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unit_id: unitId, unit_type: 'acoustic', name, lat, lng })
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || `HTTP ${res.status}`)
+      }
+      status.className = 'reg-status ok'
+      status.textContent = `REGISTERED: ${unitId}`
+      addLog(true, `UNIT REGISTERED: ${unitId} | ${name}`)
+
+      // Clear form fields
+      document.getElementById('reg-unit-id').value = ''
+      document.getElementById('reg-name').value    = ''
+      document.getElementById('reg-lat').value     = ''
+      document.getElementById('reg-lng').value     = ''
+
+      // Reload unit list and auto-select the new unit
+      await loadUnits(unitId)
+
+      // Close the form after a brief display
+      setTimeout(() => {
+        regForm.classList.remove('open')
+        regToggle.classList.remove('open')
+        status.textContent = ''
+      }, 1500)
+    } catch (err) {
+      status.className = 'reg-status err'
+      status.textContent = `ERROR: ${err.message}`
+      addLog(false, `REGISTER FAILED: ${err.message}`)
+    } finally {
+      btn.disabled = false
+    }
+  })
+
+  // ── microphone start / stop ────────────────────────────────────────────────
+  document.getElementById('btn-mic-on').addEventListener('click', startMic)
+  document.getElementById('btn-mic-off').addEventListener('click', stopMic)
+
+  async function startMic() {
+    const errEl = document.getElementById('mic-error')
+    errEl.style.display = 'none'
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    } catch (err) {
+      errEl.textContent = '⚠ MIC ERROR: ' + err.message
+      errEl.style.display = 'block'
+      return
+    }
+
+    // Web Audio setup
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+    const src = audioCtx.createMediaStreamSource(micStream)
+    analyser  = audioCtx.createAnalyser()
+    analyser.fftSize = 2048
+    src.connect(analyser)
+
+    document.getElementById('no-mic').classList.add('hidden')
+    document.getElementById('waveform-canvas').classList.add('active')
+    document.getElementById('spectrum-canvas').classList.add('active')
+    document.getElementById('hud-info').classList.add('active')
+    document.getElementById('db-bar-wrap').classList.add('active')
+    document.getElementById('mic-status').textContent = '● LIVE'
+    document.getElementById('mic-status').className = 'live'
+    document.getElementById('btn-mic-on').disabled = true
+    document.getElementById('btn-mic-off').disabled = false
+
+    drawLoop()
+  }
+
+  function stopMic() {
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null }
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null }
+    if (audioCtx)  { audioCtx.close(); audioCtx = null }
+    analyser = null
+
+    document.getElementById('no-mic').classList.remove('hidden')
+    document.getElementById('waveform-canvas').classList.remove('active')
+    document.getElementById('spectrum-canvas').classList.remove('active')
+    document.getElementById('hud-info').classList.remove('active')
+    document.getElementById('db-bar-wrap').classList.remove('active')
+    document.getElementById('mic-status').textContent = '● IDLE'
+    document.getElementById('mic-status').className = 'idle'
+    document.getElementById('btn-mic-on').disabled = false
+    document.getElementById('btn-mic-off').disabled = true
+    stopSend()
+
+    ;['waveform-canvas','spectrum-canvas'].forEach(id => {
+      const c = document.getElementById(id)
+      c.getContext('2d').clearRect(0, 0, c.width, c.height)
+    })
+  }
+
+  // ── canvas draw loop ───────────────────────────────────────────────────────
+  function drawLoop() {
+    if (!analyser) return
+    animFrame = requestAnimationFrame(drawLoop)
+
+    const bufLen = analyser.frequencyBinCount
+    const tBuf   = new Uint8Array(bufLen)
+    const fBuf   = new Uint8Array(bufLen)
+    analyser.getByteTimeDomainData(tBuf)
+    analyser.getByteFrequencyData(fBuf)
+
+    // ── waveform ──────────────────────────────────────────────────────────────
+    const wc  = document.getElementById('waveform-canvas')
+    wc.width  = wc.offsetWidth
+    wc.height = wc.offsetHeight
+    const wctx = wc.getContext('2d')
+    wctx.clearRect(0, 0, wc.width, wc.height)
+    wctx.lineWidth   = 1.5
+    wctx.strokeStyle = '#00d4ff'
+    wctx.shadowColor = '#00d4ff'
+    wctx.shadowBlur  = 4
+    wctx.beginPath()
+    const sliceW = wc.width / bufLen
+    let x = 0
+    for (let i = 0; i < bufLen; i++) {
+      const v = tBuf[i] / 128.0
+      const y = (v * wc.height) / 2
+      i === 0 ? wctx.moveTo(x, y) : wctx.lineTo(x, y)
+      x += sliceW
+    }
+    wctx.stroke()
+
+    // ── spectrum ──────────────────────────────────────────────────────────────
+    const sc  = document.getElementById('spectrum-canvas')
+    sc.width  = sc.offsetWidth
+    sc.height = sc.offsetHeight
+    const sctx = sc.getContext('2d')
+    sctx.clearRect(0, 0, sc.width, sc.height)
+    const barW = (sc.width / (bufLen / 4)) - 1
+    for (let i = 0; i < bufLen / 4; i++) {
+      const bh = (fBuf[i] / 255) * sc.height
+      const hue = 180 + (fBuf[i] / 255) * 60
+      sctx.fillStyle = `hsla(${hue}, 100%, 55%, 0.85)`
+      sctx.fillRect(i * (barW + 1), sc.height - bh, barW, bh)
+    }
+
+    // ── dB level bar ──────────────────────────────────────────────────────────
+    let rms = 0
+    for (let i = 0; i < tBuf.length; i++) {
+      const s = (tBuf[i] - 128) / 128
+      rms += s * s
+    }
+    rms = Math.sqrt(rms / tBuf.length)
+    const lvl = Math.min(100, rms * 600)
+    document.getElementById('db-bar').style.height = lvl + '%'
+
+    // ── HUD ───────────────────────────────────────────────────────────────────
+    const ts = new Date().toLocaleTimeString('en-GB', { hour12: false })
+    document.getElementById('hud-info').innerHTML = selectedUnit
+      ? `UNIT: ${selectedUnit.id.toUpperCase()}<br>` +
+        `LAT: ${selectedUnit.lat.toFixed(4)}<br>` +
+        `LNG: ${selectedUnit.lng.toFixed(4)}<br>` +
+        `LEVEL: ${lvl.toFixed(0)} dB<br>` +
+        `${ts}`
+      : `LEVEL: ${lvl.toFixed(0)} dB<br>${ts}`
+  }
+
+  // ── send ───────────────────────────────────────────────────────────────────
+  document.getElementById('btn-send-on').addEventListener('click', startSend)
+  document.getElementById('btn-send-off').addEventListener('click', stopSend)
+  document.getElementById('btn-send-one').addEventListener('click', sendOnce)
+
+  function startSend() {
+    sendOnce()
+    sendTimer = setInterval(sendOnce, intervalSec * 1000)
+    document.getElementById('btn-send-on').disabled  = true
+    document.getElementById('btn-send-off').disabled = false
+    document.getElementById('hud-tx-badge').classList.add('active')
+    document.querySelectorAll('.iv-btn').forEach(b => b.disabled = true)
+  }
+
+  function stopSend() {
+    if (sendTimer) { clearInterval(sendTimer); sendTimer = null }
+    document.getElementById('btn-send-on').disabled  = false
+    document.getElementById('btn-send-off').disabled = true
+    document.getElementById('hud-tx-badge').classList.remove('active')
+    document.querySelectorAll('.iv-btn').forEach(b => b.disabled = false)
+  }
+
+  async function sendOnce() {
+    if (!selectedUnit) { addLog(false, 'NO UNIT SELECTED'); return }
+    const jitter     = (Math.random() - 0.5) * 0.08
+    const confidence = Math.min(0.99, Math.max(0.50, baseConf + jitter))
+    const payload = {
+      unit_id:    selectedUnit.id,
+      label:      selectedLabel.label,
+      confidence: parseFloat(confidence.toFixed(3)),
+      lat:        selectedUnit.lat + (Math.random() - 0.5) * 0.005,
+      lng:        selectedUnit.lng + (Math.random() - 0.5) * 0.005,
+      metadata: {
+        demo_audio:  true,
+        mic_active:  !!micStream,
+        browser:     navigator.userAgent.slice(-40),
+      }
+    }
+
+    try {
+      const res = await fetch('/api/audio-demo/detection', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      addLog(true,
+        `${selectedLabel.label.toUpperCase()} &nbsp;|&nbsp; ${(confidence * 100).toFixed(1)}% &nbsp;|&nbsp; ${selectedUnit.id}`)
+      setConn(true)
+    } catch (err) {
+      addLog(false, `TX FAILED: ${err.message}`)
+      setConn(false)
+    }
+  }
+
+  // ── log ────────────────────────────────────────────────────────────────────
+  function addLog(ok, msg) {
+    const empty = document.getElementById('log-empty')
+    if (empty) empty.remove()
+    logCount++
+    document.getElementById('log-count').textContent = logCount
+    const ts  = new Date().toLocaleTimeString('en-GB', { hour12: false })
+    const el  = document.createElement('div')
+    el.className = 'log-entry ' + (ok ? 'ok' : 'err')
+    el.innerHTML = `<span class="log-ts">${ts}</span><span class="log-msg">${msg}</span>`
+    const body = document.getElementById('log-body')
+    body.prepend(el)
+    while (body.children.length > 60) body.removeChild(body.lastChild)
+  }
+
+  // ── detection type ─────────────────────────────────────────────────────────
+  document.getElementById('det-options').addEventListener('click', e => {
+    const btn = e.target.closest('.det-opt')
+    if (!btn) return
+    document.querySelectorAll('.det-opt').forEach(b => b.classList.remove('selected'))
+    btn.classList.add('selected')
+    selectedLabel = { label: btn.dataset.label, severity: btn.dataset.sev }
+  })
+
+  // ── interval selector ──────────────────────────────────────────────────────
+  document.getElementById('interval-row').addEventListener('click', e => {
+    const btn = e.target.closest('.iv-btn')
+    if (!btn || btn.disabled) return
+    document.querySelectorAll('.iv-btn').forEach(b => b.classList.remove('selected'))
+    btn.classList.add('selected')
+    intervalSec = +btn.dataset.sec
+    if (sendTimer) {
+      clearInterval(sendTimer)
+      sendTimer = setInterval(sendOnce, intervalSec * 1000)
+    }
+  })
+
+  // ── init ───────────────────────────────────────────────────────────────────
+  loadUnits()
+</script>
+</body>
+</html>

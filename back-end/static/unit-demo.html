@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Mirqab — وحدة ميدانية</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:    #00e05a;
+      --green-dim:#00802e;
+      --green-bg: #00e05a18;
+      --red:      #ff4444;
+      --yellow:   #ffd700;
+      --bg:       #060b06;
+      --bg2:      #0b120b;
+      --bg3:      #111911;
+      --border:   #1a2e1a;
+      --text:     #b8d4b8;
+      --text-dim: #5a7a5a;
+      --font:     'Courier New', 'Lucida Console', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    /* ── SCANLINE OVERLAY ── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── TOP BAR ── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 44px;
+      padding: 0 16px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #topbar .brand {
+      font-size: 15px;
+      font-weight: bold;
+      letter-spacing: 4px;
+      color: var(--green);
+      text-shadow: 0 0 8px var(--green);
+    }
+    #topbar .brand span { color: var(--text-dim); font-size: 11px; letter-spacing: 2px; }
+    #topbar .status-bar {
+      display: flex; align-items: center; gap: 20px; font-size: 11px; color: var(--text-dim);
+    }
+    .conn-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--red); margin-left: 6px;
+      box-shadow: 0 0 6px var(--red);
+      transition: all 0.3s;
+    }
+    .conn-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+    #clock { color: var(--green); letter-spacing: 2px; font-size: 12px; }
+
+    @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:0.4 } }
+    @keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:0 } }
+
+    /* ── LAYOUT ── */
+    #shell {
+      display: flex;
+      height: calc(100vh - 44px);
+      overflow: hidden;
+    }
+
+    /* ── LEFT: CAMERA PANEL ── */
+    #cam-panel {
+      flex: 1 1 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      min-width: 0;
+    }
+    #cam-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #cam-header .label { color: var(--green-dim); font-size: 10px; letter-spacing: 3px; text-transform: uppercase; }
+    #cam-status { font-size: 10px; }
+    #cam-status.live { color: var(--red); animation: blink 1s infinite; }
+    #cam-status.idle { color: var(--text-dim); }
+
+    #video-wrapper {
+      flex: 1; position: relative; background: #000; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #video {
+      width: 100%; height: 100%; object-fit: cover;
+      display: none;
+    }
+    #video.active { display: block; }
+
+    #no-cam {
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      color: var(--text-dim); text-align: center;
+    }
+    #no-cam.hidden { display: none; }
+    #no-cam svg { opacity: 0.2; }
+    #no-cam p { font-size: 11px; letter-spacing: 2px; }
+
+    /* HUD overlays */
+    #hud-corners {
+      position: absolute; inset: 0; pointer-events: none;
+    }
+    .corner {
+      position: absolute; width: 20px; height: 20px;
+      border-color: var(--green); border-style: solid; opacity: 0.4;
+    }
+    .corner.tl { top:12px; right:12px; border-width: 2px 0 0 2px; }
+    .corner.tr { top:12px; left:12px;  border-width: 2px 2px 0 0; }
+    .corner.bl { bottom:12px; right:12px; border-width: 0 0 2px 2px; }
+    .corner.br { bottom:12px; left:12px; border-width: 0 2px 2px 0; }
+
+    #hud-info {
+      position: absolute; top: 10px; right: 12px;
+      font-size: 10px; color: var(--green); letter-spacing: 1px;
+      line-height: 1.8; pointer-events: none; opacity: 0.7;
+      display: none;
+    }
+    #hud-info.active { display: block; }
+    #hud-sending-badge {
+      position: absolute; bottom: 12px; left: 12px;
+      background: rgba(255,0,0,0.2); border: 1px solid var(--red);
+      color: var(--red); font-size: 10px; letter-spacing: 3px; padding: 3px 8px;
+      display: none; animation: blink 0.8s infinite;
+    }
+    #hud-sending-badge.active { display: block; }
+    #cam-error { color: var(--red); font-size: 10px; padding: 6px 12px; display: none; }
+
+    /* ── RIGHT: CONTROLS PANEL ── */
+    #ctrl-panel {
+      width: 300px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg2);
+      overflow: hidden;
+    }
+
+    .section {
+      border-bottom: 1px solid var(--border);
+      padding: 12px 14px;
+      flex-shrink: 0;
+    }
+    .section-title {
+      font-size: 9px; letter-spacing: 3px; color: var(--text-dim);
+      text-transform: uppercase; margin-bottom: 10px;
+    }
+
+    /* Unit selector */
+    .unit-options { display: flex; flex-direction: column; gap: 6px; }
+    .unit-opt {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      cursor: pointer; font-family: var(--font); font-size: 12px;
+      transition: all 0.15s; letter-spacing: 1px;
+      text-align: right;
+      width: 100%;
+    }
+    .unit-opt:hover { border-color: var(--green-dim); color: var(--green); }
+    .unit-opt.selected { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+    .unit-opt .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      border: 1px solid currentColor; flex-shrink: 0;
+      margin-right: auto;
+    }
+    .unit-opt.selected .dot { background: currentColor; }
+
+    /* Unit loading / empty states */
+    .unit-loading {
+      font-size: 10px; color: var(--text-dim); letter-spacing: 2px;
+      padding: 6px 0; text-align: center;
+    }
+
+    /* Register unit section */
+    .reg-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none;
+      font-size: 9px; letter-spacing: 3px; color: var(--text-dim);
+      text-transform: uppercase; margin-bottom: 0;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .reg-toggle:hover { color: var(--green); }
+    .reg-toggle .arrow {
+      font-size: 9px; transition: transform 0.2s;
+    }
+    .reg-toggle.open .arrow { transform: rotate(90deg); }
+
+    .reg-form {
+      display: none;
+      flex-direction: column;
+      gap: 7px;
+      padding: 10px 14px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg3);
+      flex-shrink: 0;
+    }
+    .reg-form.open { display: flex; }
+
+    .reg-field {
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .reg-field label {
+      font-size: 9px; letter-spacing: 2px; color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .reg-field input {
+      background: var(--bg2); color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 8px; font-family: var(--font); font-size: 11px;
+      outline: none; transition: border-color 0.15s; width: 100%;
+    }
+    .reg-field input:focus { border-color: var(--green-dim); }
+    .reg-field input::placeholder { color: var(--text-dim); opacity: 0.6; }
+
+    .reg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+
+    .btn-reg {
+      padding: 8px; border: 1px solid var(--green);
+      background: transparent; color: var(--green);
+      cursor: pointer; font-family: var(--font); font-size: 11px;
+      letter-spacing: 2px; transition: all 0.15s; width: 100%;
+      margin-top: 2px;
+    }
+    .btn-reg:hover:not(:disabled) { background: var(--green-bg); }
+    .btn-reg:disabled { opacity: 0.3; cursor: not-allowed; }
+    .reg-status {
+      font-size: 10px; letter-spacing: 1px; min-height: 16px;
+      text-align: center;
+    }
+    .reg-status.ok  { color: var(--green); }
+    .reg-status.err { color: var(--red); }
+
+    /* Camera selector */
+    select {
+      width: 100%;
+      background: var(--bg3); color: var(--text);
+      border: 1px solid var(--border);
+      padding: 7px 8px; font-family: var(--font); font-size: 11px;
+      outline: none; cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    select:hover, select:focus { border-color: var(--green-dim); }
+    select:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Detection type */
+    .det-options { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .det-opt {
+      padding: 5px 4px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-dim);
+      cursor: pointer; font-family: var(--font); font-size: 10px;
+      transition: all 0.15s; text-align: center; letter-spacing: 1px;
+    }
+    .det-opt:hover { border-color: var(--green-dim); color: var(--text); }
+    .det-opt.selected { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+
+    /* Interval */
+    .interval-row { display: flex; gap: 5px; flex-wrap: wrap; }
+    .iv-btn {
+      padding: 4px 10px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-dim);
+      cursor: pointer; font-family: var(--font); font-size: 10px;
+      transition: all 0.15s;
+    }
+    .iv-btn:hover { border-color: var(--green-dim); color: var(--text); }
+    .iv-btn.selected { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+    .iv-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* Action buttons */
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+    .btn {
+      padding: 9px 6px;
+      border: 1px solid;
+      background: transparent;
+      cursor: pointer; font-family: var(--font); font-size: 11px;
+      letter-spacing: 1px; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-green { border-color: var(--green); color: var(--green); }
+    .btn-green:not(:disabled):hover { background: var(--green-bg); }
+    .btn-dim   { border-color: var(--border); color: var(--text-dim); }
+    .btn-dim:not(:disabled):hover { border-color: var(--text-dim); color: var(--text); }
+    .btn-red   { border-color: var(--red); color: var(--red); }
+    .btn-red:not(:disabled):hover { background: rgba(255,68,68,0.1); }
+    .btn-full { width: 100%; margin-bottom: 6px; padding: 8px; }
+
+    /* Event log */
+    #log-panel {
+      flex: 1; display: flex; flex-direction: column;
+      border-top: 1px solid var(--border); overflow: hidden;
+      min-height: 0;
+    }
+    #log-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 14px;
+      flex-shrink: 0;
+    }
+    #log-header .lbl { font-size: 9px; letter-spacing: 3px; color: var(--text-dim); }
+    #log-header .cnt { font-size: 10px; color: var(--green); }
+    #log-body {
+      flex: 1; overflow-y: auto; padding: 0 14px 10px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    #log-body::-webkit-scrollbar { width: 4px; }
+    #log-body::-webkit-scrollbar-thumb { background: var(--border); }
+    .log-entry {
+      display: flex; gap: 8px; font-size: 10px; line-height: 1.5;
+      border-right: 2px solid var(--border); padding-right: 6px;
+      transition: opacity 0.3s;
+    }
+    .log-entry.ok { border-right-color: var(--green); }
+    .log-entry.err { border-right-color: var(--red); color: var(--red); }
+    .log-ts { color: var(--text-dim); flex-shrink: 0; }
+    .log-msg { flex: 1; }
+    .log-conf { color: var(--green); margin-right: auto; flex-shrink: 0; }
+
+    #log-empty { color: var(--text-dim); font-size: 10px; letter-spacing: 2px; padding-top: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="brand">
+    MIRQAB &nbsp;<span>// FIELD UNIT INTERFACE</span>
+  </div>
+  <div class="status-bar">
+    <span>
+      <span class="conn-dot" id="conn-dot"></span>
+      <span id="conn-label">CONNECTING...</span>
+    </span>
+    <span id="unit-badge" style="color:var(--green);letter-spacing:2px;">—</span>
+    <span id="clock">00:00:00</span>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div id="shell">
+
+  <!-- CAMERA PANEL -->
+  <div id="cam-panel">
+    <div id="cam-header">
+      <span class="label">LIVE FEED</span>
+      <span id="cam-status" class="idle">● IDLE</span>
+    </div>
+    <div id="video-wrapper">
+      <div id="no-cam">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+          <circle cx="12" cy="13" r="3"/>
+        </svg>
+        <p>NO CAMERA FEED</p>
+        <p style="font-size:10px;opacity:0.5;">REQUIRES HTTPS ON NON-LOCALHOST</p>
+      </div>
+      <video id="video" playsinline muted autoplay></video>
+      <div id="hud-corners" aria-hidden="true">
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+      </div>
+      <div id="hud-info"></div>
+      <div id="hud-sending-badge">TX ●</div>
+    </div>
+    <div id="cam-error"></div>
+  </div>
+
+  <!-- CONTROLS PANEL -->
+  <div id="ctrl-panel">
+
+    <!-- UNIT SELECT -->
+    <div class="section">
+      <div class="section-title">UNIT SELECT</div>
+      <div class="unit-options" id="unit-options">
+        <div class="unit-loading">[ LOADING UNITS... ]</div>
+      </div>
+    </div>
+
+    <!-- REGISTER UNIT (collapsible) -->
+    <div class="reg-toggle" id="reg-toggle">
+      <span>REGISTER UNIT</span>
+      <span class="arrow">&#9654;</span>
+    </div>
+    <div class="reg-form" id="reg-form">
+      <div class="reg-field">
+        <label>Unit ID</label>
+        <input type="text" id="reg-unit-id" placeholder="vision-03" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="reg-field">
+        <label>Name</label>
+        <input type="text" id="reg-name" placeholder="VISION-03 | القطاع ج" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="reg-row">
+        <div class="reg-field">
+          <label>Lat</label>
+          <input type="number" id="reg-lat" placeholder="24.7636" step="any" />
+        </div>
+        <div class="reg-field">
+          <label>Lng</label>
+          <input type="number" id="reg-lng" placeholder="46.7253" step="any" />
+        </div>
+      </div>
+      <button class="btn-reg" id="btn-register">+ REGISTER</button>
+      <div class="reg-status" id="reg-status"></div>
+    </div>
+
+    <!-- CAMERA -->
+    <div class="section">
+      <div class="section-title">CAMERA SOURCE</div>
+      <select id="cam-select" style="margin-bottom:8px;">
+        <option value="">— DETECTING CAMERAS —</option>
+      </select>
+      <div class="btn-row">
+        <button class="btn btn-green" id="btn-cam-on">&#9654; START</button>
+        <button class="btn btn-dim"   id="btn-cam-off" disabled>&#9632; STOP</button>
+      </div>
+    </div>
+
+    <!-- DETECTION TYPE -->
+    <div class="section">
+      <div class="section-title">DETECTION TYPE</div>
+      <div class="det-options" id="det-options">
+        <button class="det-opt selected" data-label="uav"      data-sev="high">UAV</button>
+        <button class="det-opt"          data-label="drone"    data-sev="high">DRONE</button>
+        <button class="det-opt"          data-label="aircraft" data-sev="medium">AIRCRAFT</button>
+        <button class="det-opt"          data-label="vehicle"  data-sev="medium">VEHICLE</button>
+        <button class="det-opt"          data-label="person"   data-sev="low">PERSON</button>
+      </div>
+    </div>
+
+    <!-- SEND INTERVAL -->
+    <div class="section">
+      <div class="section-title">SEND INTERVAL</div>
+      <div class="interval-row" id="interval-row">
+        <button class="iv-btn" data-sec="5">5s</button>
+        <button class="iv-btn selected" data-sec="10">10s</button>
+        <button class="iv-btn" data-sec="30">30s</button>
+        <button class="iv-btn" data-sec="60">60s</button>
+      </div>
+    </div>
+
+    <!-- TRANSMIT -->
+    <div class="section">
+      <div class="section-title">TRANSMIT</div>
+      <div class="btn-row">
+        <button class="btn btn-green" id="btn-send-on">&#9654; START TX</button>
+        <button class="btn btn-red"   id="btn-send-off" disabled>&#9632; STOP TX</button>
+      </div>
+      <button class="btn btn-dim btn-full" id="btn-send-one">SEND SINGLE DETECTION</button>
+    </div>
+
+    <!-- LOG -->
+    <div id="log-panel">
+      <div id="log-header">
+        <span class="lbl">EVENT LOG</span>
+        <span class="cnt" id="log-count">0</span>
+      </div>
+      <div id="log-body">
+        <div id="log-empty">[ NO EVENTS ]</div>
+      </div>
+    </div>
+
+  </div><!-- /ctrl-panel -->
+</div><!-- /shell -->
+
+<canvas id="capture-canvas" style="display:none;"></canvas>
+
+<script>
+  // ── state ──────────────────────────────────────────────────────────────────
+  let selectedUnit  = null
+  let selectedLabel = { label: 'uav', severity: 'high' }
+  let intervalSec   = 10
+  let camStream     = null
+  let sendTimer     = null
+  let logCount      = 0
+
+  // ── feed WebSocket (frame streaming to HQ) ─────────────────────────────────
+  let feedWs       = null
+  let feedCapture  = null  // setInterval handle
+
+  function feedWsBase() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${proto}//${location.host}`
+  }
+
+  function startFeed(unitId) {
+    stopFeed()
+    const url = `${feedWsBase()}/ws/unit/${unitId}/feed`
+    feedWs = new WebSocket(url)
+    feedWs.binaryType = 'arraybuffer'
+
+    feedWs.onopen = () => {
+      addLog(true, `FEED STREAM STARTED → ${unitId}`)
+      const canvas = document.getElementById('capture-canvas')
+      const ctx = canvas.getContext('2d')
+      const vid  = document.getElementById('video')
+
+      feedCapture = setInterval(() => {
+        if (!camStream || feedWs.readyState !== WebSocket.OPEN) return
+        const w = vid.videoWidth  || 640
+        const h = vid.videoHeight || 480
+        canvas.width  = w
+        canvas.height = h
+        ctx.drawImage(vid, 0, 0, w, h)
+        canvas.toBlob(blob => {
+          if (!blob) return
+          blob.arrayBuffer().then(buf => {
+            if (feedWs && feedWs.readyState === WebSocket.OPEN) feedWs.send(buf)
+          })
+        }, 'image/jpeg', 0.65)
+      }, 100)
+    }
+
+    feedWs.onclose = () => {
+      stopFeedCapture()
+    }
+
+    feedWs.onerror = () => feedWs.close()
+  }
+
+  function stopFeedCapture() {
+    if (feedCapture) { clearInterval(feedCapture); feedCapture = null }
+  }
+
+  function stopFeed() {
+    stopFeedCapture()
+    if (feedWs) { feedWs.close(); feedWs = null }
+  }
+
+  // ── clock ──────────────────────────────────────────────────────────────────
+  function updateClock() {
+    const now = new Date()
+    document.getElementById('clock').textContent =
+      now.toLocaleTimeString('en-GB', { hour12: false })
+  }
+  updateClock()
+  setInterval(updateClock, 1000)
+
+  // ── backend connectivity ───────────────────────────────────────────────────
+  async function checkConn() {
+    try {
+      const r = await fetch('/health')
+      setConn(r.ok)
+    } catch { setConn(false) }
+  }
+  function setConn(ok) {
+    const dot   = document.getElementById('conn-dot')
+    const label = document.getElementById('conn-label')
+    dot.className   = 'conn-dot' + (ok ? ' online' : '')
+    label.textContent = ok ? 'HQ CONNECTED' : 'HQ OFFLINE'
+  }
+  checkConn()
+  setInterval(checkConn, 8000)
+
+  // ── unit badge ─────────────────────────────────────────────────────────────
+  function updateUnitBadge() {
+    document.getElementById('unit-badge').textContent =
+      selectedUnit ? selectedUnit.id.toUpperCase() : '—'
+  }
+  updateUnitBadge()
+
+  // ── unit list ──────────────────────────────────────────────────────────────
+  async function loadUnits(autoSelectId) {
+    const container = document.getElementById('unit-options')
+    try {
+      const res = await fetch('/api/units')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const all = await res.json()
+      const units = all.filter(u => u.unit_type === 'vision')
+
+      container.innerHTML = ''
+
+      if (units.length === 0) {
+        container.innerHTML = '<div class="unit-loading">[ NO VISION UNITS ]</div>'
+        selectedUnit = null
+        updateUnitBadge()
+        return
+      }
+
+      units.forEach((u, i) => {
+        const btn = document.createElement('button')
+        btn.className = 'unit-opt'
+        btn.dataset.id  = u.unit_id
+        btn.dataset.lat = u.lat
+        btn.dataset.lng = u.lng
+        btn.innerHTML = `<div class="dot"></div>${u.name || u.unit_id}`
+
+        const shouldSelect = autoSelectId
+          ? u.unit_id === autoSelectId
+          : i === 0
+
+        if (shouldSelect) {
+          btn.classList.add('selected')
+          selectedUnit = { id: u.unit_id, lat: +u.lat, lng: +u.lng }
+          updateUnitBadge()
+          if (camStream) startFeed(selectedUnit.id)
+        }
+
+        container.appendChild(btn)
+      })
+
+      // If autoSelectId was provided but not found, fall back to first
+      if (autoSelectId && !selectedUnit) {
+        const first = container.querySelector('.unit-opt')
+        if (first) {
+          first.classList.add('selected')
+          selectedUnit = { id: first.dataset.id, lat: +first.dataset.lat, lng: +first.dataset.lng }
+          updateUnitBadge()
+        }
+      }
+    } catch (err) {
+      container.innerHTML = '<div class="unit-loading" style="color:var(--red)">[ LOAD FAILED ]</div>'
+      addLog(false, `UNIT LOAD ERROR: ${err.message}`)
+    }
+  }
+
+  // ── unit selector (delegated) ──────────────────────────────────────────────
+  document.getElementById('unit-options').addEventListener('click', e => {
+    const btn = e.target.closest('.unit-opt')
+    if (!btn) return
+    document.querySelectorAll('.unit-opt').forEach(b => b.classList.remove('selected'))
+    btn.classList.add('selected')
+    selectedUnit = { id: btn.dataset.id, lat: +btn.dataset.lat, lng: +btn.dataset.lng }
+    updateUnitBadge()
+    if (camStream) startFeed(selectedUnit.id)
+  })
+
+  // ── register unit ──────────────────────────────────────────────────────────
+  const regToggle = document.getElementById('reg-toggle')
+  const regForm   = document.getElementById('reg-form')
+
+  regToggle.addEventListener('click', () => {
+    const open = regForm.classList.toggle('open')
+    regToggle.classList.toggle('open', open)
+  })
+
+  document.getElementById('btn-register').addEventListener('click', async () => {
+    const unitId = document.getElementById('reg-unit-id').value.trim()
+    const name   = document.getElementById('reg-name').value.trim()
+    const lat    = parseFloat(document.getElementById('reg-lat').value)
+    const lng    = parseFloat(document.getElementById('reg-lng').value)
+    const status = document.getElementById('reg-status')
+
+    if (!unitId) { status.className = 'reg-status err'; status.textContent = 'UNIT ID REQUIRED'; return }
+    if (!name)   { status.className = 'reg-status err'; status.textContent = 'NAME REQUIRED'; return }
+    if (isNaN(lat) || isNaN(lng)) { status.className = 'reg-status err'; status.textContent = 'VALID LAT/LNG REQUIRED'; return }
+
+    const btn = document.getElementById('btn-register')
+    btn.disabled = true
+    status.className = 'reg-status'
+    status.textContent = 'REGISTERING...'
+
+    try {
+      const res = await fetch('/api/units', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unit_id: unitId, unit_type: 'vision', name, lat, lng })
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || `HTTP ${res.status}`)
+      }
+      status.className = 'reg-status ok'
+      status.textContent = `REGISTERED: ${unitId}`
+      addLog(true, `UNIT REGISTERED: ${unitId} | ${name}`)
+
+      // Clear form fields
+      document.getElementById('reg-unit-id').value = ''
+      document.getElementById('reg-name').value    = ''
+      document.getElementById('reg-lat').value     = ''
+      document.getElementById('reg-lng').value     = ''
+
+      // Reload unit list and auto-select the new unit
+      await loadUnits(unitId)
+
+      // Close the form after a brief display
+      setTimeout(() => {
+        regForm.classList.remove('open')
+        regToggle.classList.remove('open')
+        status.textContent = ''
+      }, 1500)
+    } catch (err) {
+      status.className = 'reg-status err'
+      status.textContent = `ERROR: ${err.message}`
+      addLog(false, `REGISTER FAILED: ${err.message}`)
+    } finally {
+      btn.disabled = false
+    }
+  })
+
+  // ── camera enumeration ─────────────────────────────────────────────────────
+  async function enumCameras() {
+    if (!navigator.mediaDevices) return
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const cams = devices.filter(d => d.kind === 'videoinput')
+      const sel = document.getElementById('cam-select')
+      sel.innerHTML = ''
+      if (cams.length === 0) {
+        sel.innerHTML = '<option value="">NO CAMERAS FOUND</option>'
+        return
+      }
+      cams.forEach((c, i) => {
+        const o = document.createElement('option')
+        o.value = c.deviceId
+        o.textContent = c.label || `CAMERA ${i + 1}`
+        sel.appendChild(o)
+      })
+    } catch {}
+  }
+  enumCameras()
+
+  // ── camera start/stop ──────────────────────────────────────────────────────
+  document.getElementById('btn-cam-on').addEventListener('click', startCamera)
+  document.getElementById('btn-cam-off').addEventListener('click', stopCamera)
+
+  async function startCamera() {
+    const errEl = document.getElementById('cam-error')
+    errEl.style.display = 'none'
+    const deviceId = document.getElementById('cam-select').value
+    const constraints = {
+      video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'environment' },
+      audio: false
+    }
+    try {
+      camStream = await navigator.mediaDevices.getUserMedia(constraints)
+      const vid = document.getElementById('video')
+      vid.srcObject = camStream
+      vid.classList.add('active')
+      document.getElementById('no-cam').classList.add('hidden')
+      document.getElementById('cam-status').textContent = '● LIVE'
+      document.getElementById('cam-status').className = 'live'
+      document.getElementById('hud-info').classList.add('active')
+      document.getElementById('cam-select').disabled = true
+      document.getElementById('btn-cam-on').disabled = true
+      document.getElementById('btn-cam-off').disabled = false
+      enumCameras()
+      if (selectedUnit) startFeed(selectedUnit.id)
+    } catch (err) {
+      errEl.textContent = '⚠ CAMERA ERROR: ' + err.message
+      errEl.style.display = 'block'
+    }
+  }
+
+  function stopCamera() {
+    if (camStream) {
+      camStream.getTracks().forEach(t => t.stop())
+      camStream = null
+    }
+    const vid = document.getElementById('video')
+    vid.srcObject = null
+    vid.classList.remove('active')
+    document.getElementById('no-cam').classList.remove('hidden')
+    document.getElementById('cam-status').textContent = '● IDLE'
+    document.getElementById('cam-status').className = 'idle'
+    document.getElementById('hud-info').classList.remove('active')
+    document.getElementById('cam-select').disabled = false
+    document.getElementById('btn-cam-on').disabled = false
+    document.getElementById('btn-cam-off').disabled = true
+    stopSend()
+    stopFeed()
+  }
+
+  // Update HUD info text while streaming
+  setInterval(() => {
+    const el = document.getElementById('hud-info')
+    if (!el.classList.contains('active')) return
+    const ts = new Date().toLocaleTimeString('en-GB', { hour12: false })
+    el.innerHTML = selectedUnit
+      ? `UNIT: ${selectedUnit.id.toUpperCase()}<br>` +
+        `LAT: ${selectedUnit.lat.toFixed(4)}<br>` +
+        `LNG: ${selectedUnit.lng.toFixed(4)}<br>` +
+        `${ts}`
+      : `${ts}`
+  }, 1000)
+
+  // ── send ───────────────────────────────────────────────────────────────────
+  document.getElementById('btn-send-on').addEventListener('click', startSend)
+  document.getElementById('btn-send-off').addEventListener('click', stopSend)
+  document.getElementById('btn-send-one').addEventListener('click', sendOnce)
+
+  function startSend() {
+    sendOnce()
+    sendTimer = setInterval(sendOnce, intervalSec * 1000)
+    document.getElementById('btn-send-on').disabled = true
+    document.getElementById('btn-send-off').disabled = false
+    document.getElementById('hud-sending-badge').classList.add('active')
+    document.querySelectorAll('.iv-btn').forEach(b => b.disabled = true)
+  }
+
+  function stopSend() {
+    if (sendTimer) { clearInterval(sendTimer); sendTimer = null }
+    document.getElementById('btn-send-on').disabled = false
+    document.getElementById('btn-send-off').disabled = true
+    document.getElementById('hud-sending-badge').classList.remove('active')
+    document.querySelectorAll('.iv-btn').forEach(b => b.disabled = false)
+  }
+
+  async function sendOnce() {
+    if (!selectedUnit) { addLog(false, 'NO UNIT SELECTED'); return }
+    const confidence = parseFloat((0.55 + Math.random() * 0.43).toFixed(3))
+    const payload = {
+      unit_id:    selectedUnit.id,
+      label:      selectedLabel.label,
+      confidence: confidence,
+      severity:   selectedLabel.severity,
+      lat:        selectedUnit.lat + (Math.random() - 0.5) * 0.01,
+      lng:        selectedUnit.lng + (Math.random() - 0.5) * 0.01,
+      metadata: {
+        demo_camera: true,
+        browser: navigator.userAgent.slice(-40),
+        cam_active: !!camStream
+      }
+    }
+
+    try {
+      const res = await fetch('/api/unit-demo/detection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      await res.json()
+      addLog(true, `${selectedLabel.label.toUpperCase()} &nbsp;|&nbsp; ${(confidence*100).toFixed(1)}% &nbsp;|&nbsp; ${selectedUnit.id}`)
+      setConn(true)
+    } catch (err) {
+      addLog(false, `TX FAILED: ${err.message}`)
+      setConn(false)
+    }
+  }
+
+  // ── log ────────────────────────────────────────────────────────────────────
+  function addLog(ok, msg) {
+    const empty = document.getElementById('log-empty')
+    if (empty) empty.remove()
+
+    logCount++
+    document.getElementById('log-count').textContent = logCount
+
+    const ts = new Date().toLocaleTimeString('en-GB', { hour12: false })
+    const el = document.createElement('div')
+    el.className = 'log-entry ' + (ok ? 'ok' : 'err')
+    el.innerHTML = `<span class="log-ts">${ts}</span><span class="log-msg">${msg}</span>`
+    const body = document.getElementById('log-body')
+    body.prepend(el)
+
+    while (body.children.length > 60) body.removeChild(body.lastChild)
+  }
+
+  // ── detection type ─────────────────────────────────────────────────────────
+  document.getElementById('det-options').addEventListener('click', e => {
+    const btn = e.target.closest('.det-opt')
+    if (!btn) return
+    document.querySelectorAll('.det-opt').forEach(b => b.classList.remove('selected'))
+    btn.classList.add('selected')
+    selectedLabel = { label: btn.dataset.label, severity: btn.dataset.sev }
+  })
+
+  // ── interval selector ──────────────────────────────────────────────────────
+  document.getElementById('interval-row').addEventListener('click', e => {
+    const btn = e.target.closest('.iv-btn')
+    if (!btn || btn.disabled) return
+    document.querySelectorAll('.iv-btn').forEach(b => b.classList.remove('selected'))
+    btn.classList.add('selected')
+    intervalSec = +btn.dataset.sec
+    if (sendTimer) {
+      clearInterval(sendTimer)
+      sendTimer = setInterval(sendOnce, intervalSec * 1000)
+    }
+  })
+
+  // ── init ───────────────────────────────────────────────────────────────────
+  loadUnits()
+</script>
+</body>
+</html>

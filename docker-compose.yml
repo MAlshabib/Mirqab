@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./back-end
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:////app/data/mirqab.db
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+      - SIMULATOR_AUTOSTART=false
+    volumes:
+      - mirqab_data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./front-end
+      args:
+        - NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+        - NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws/hq
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  mirqab_data:

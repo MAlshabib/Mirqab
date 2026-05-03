@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mirqab — Video Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:    #00e05a;
+      --red:      #ff4444;
+      --yellow:   #ffd700;
+      --cyan:     #00d4ff;
+      --cyan-dim: #008fa8;
+      --cyan-bg:  #00d4ff18;
+      --purple:   #a855f7;
+      --purple-bg:#a855f718;
+      --bg:       #060b0b;
+      --bg2:      #0b1212;
+      --bg3:      #111919;
+      --border:   #1a2e2e;
+      --text:     #b8d4d4;
+      --text-dim: #5a7a7a;
+      --font:     'Courier New', 'Lucida Console', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+      pointer-events: none; z-index: 9999;
+    }
+
+    /* TOP BAR */
+    #topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 44px; padding: 0 16px;
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .brand { font-size: 15px; font-weight: bold; letter-spacing: 4px; color: var(--purple); text-shadow: 0 0 8px var(--purple); }
+    .brand span { color: var(--text-dim); font-size: 11px; letter-spacing: 2px; }
+    .status-bar { display: flex; align-items: center; gap: 20px; font-size: 11px; color: var(--text-dim); }
+    .conn-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--red); margin-left: 6px; box-shadow: 0 0 6px var(--red); transition: all 0.3s; }
+    .conn-dot.online { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); animation: pulse 2s infinite; }
+    #clock { color: var(--cyan); letter-spacing: 2px; font-size: 12px; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    @keyframes spin  { to{transform:rotate(360deg)} }
+
+    /* LAYOUT */
+    #shell { display: flex; height: calc(100vh - 44px); overflow: hidden; }
+
+    /* LEFT: PREVIEW PANEL */
+    #preview-panel {
+      flex: 1 1 0; display: flex; flex-direction: column;
+      border-right: 1px solid var(--border); min-width: 0; background: #000;
+    }
+    #preview-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; background: var(--bg2);
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .panel-label { color: var(--text-dim); font-size: 10px; letter-spacing: 3px; text-transform: uppercase; }
+
+    #video-area {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+
+    #video-placeholder {
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+      color: var(--text-dim); text-align: center; z-index: 1;
+    }
+    #video-placeholder svg { opacity: 0.15; }
+    #video-placeholder p  { font-size: 11px; letter-spacing: 2px; }
+
+    #preview-video {
+      max-width: 100%; max-height: 100%; display: none;
+      border: 1px solid var(--border);
+    }
+    #preview-video.visible { display: block; }
+
+    /* progress overlay */
+    #progress-overlay {
+      display: none; position: absolute; inset: 0;
+      background: rgba(6,11,11,0.85); flex-direction: column;
+      align-items: center; justify-content: center; gap: 20px;
+      z-index: 10;
+    }
+    #progress-overlay.active { display: flex; }
+    .spinner {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 3px solid var(--border);
+      border-top-color: var(--purple);
+      animation: spin 0.8s linear infinite;
+    }
+    #progress-label { font-size: 12px; letter-spacing: 3px; color: var(--purple); }
+    #progress-bar-wrap { width: 220px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    #progress-bar { height: 100%; background: var(--purple); width: 0%; transition: width 0.3s; }
+
+    /* RIGHT: CONTROLS */
+    #ctrl-panel {
+      width: 340px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      background: var(--bg2); overflow-y: auto;
+    }
+
+    .section { border-bottom: 1px solid var(--border); padding: 12px 14px; flex-shrink: 0; }
+    .section-title { font-size: 9px; letter-spacing: 3px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 10px; }
+
+    /* File drop zone */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      padding: 20px 12px; text-align: center; cursor: pointer;
+      transition: all 0.2s; color: var(--text-dim);
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+    }
+    #drop-zone:hover, #drop-zone.dragover { border-color: var(--purple); color: var(--purple); }
+    #drop-zone svg { opacity: 0.4; transition: opacity 0.2s; }
+    #drop-zone:hover svg, #drop-zone.dragover svg { opacity: 0.8; }
+    #drop-zone .hint { font-size: 10px; letter-spacing: 1px; }
+    #file-name { font-size: 11px; color: var(--cyan); letter-spacing: 1px; min-height: 16px; text-align: center; margin-top: 4px; }
+    #file-input { display: none; }
+
+    /* Unit selectors */
+    .unit-select-wrap { display: flex; flex-direction: column; gap: 6px; }
+    .unit-label { font-size: 9px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 3px; }
+    .unit-options { display: flex; flex-direction: column; gap: 4px; max-height: 110px; overflow-y: auto; }
+    .unit-opt {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; border: 1px solid var(--border);
+      background: transparent; color: var(--text);
+      cursor: pointer; font-family: var(--font); font-size: 11px;
+      transition: all 0.15s; letter-spacing: 1px; text-align: right; width: 100%;
+    }
+    .unit-opt:hover { border-color: var(--cyan-dim); color: var(--cyan); }
+    .unit-opt.selected-vision  { border-color: var(--purple); color: var(--purple); background: var(--purple-bg); }
+    .unit-opt.selected-acoustic { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-bg); }
+    .unit-dot { width: 7px; height: 7px; border-radius: 50%; border: 1px solid currentColor; flex-shrink: 0; margin-right: auto; }
+    .selected-vision .unit-dot, .selected-acoustic .unit-dot { background: currentColor; }
+    .unit-loading { font-size: 10px; color: var(--text-dim); letter-spacing: 2px; padding: 4px 0; text-align: center; }
+
+    /* Max frames */
+    .slider-row { display: flex; align-items: center; gap: 10px; }
+    input[type=range] { flex: 1; accent-color: var(--purple); height: 3px; cursor: pointer; }
+    .slider-val { color: var(--purple); font-size: 12px; min-width: 36px; text-align: left; }
+
+    /* Process button */
+    .btn-process {
+      width: 100%; padding: 11px; border: 1px solid var(--purple);
+      background: transparent; color: var(--purple);
+      cursor: pointer; font-family: var(--font); font-size: 12px;
+      letter-spacing: 3px; transition: all 0.15s;
+    }
+    .btn-process:hover:not(:disabled) { background: var(--purple-bg); }
+    .btn-process:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* Results */
+    #results-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    #results-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    #results-body { flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+    #results-body::-webkit-scrollbar { width: 4px; }
+    #results-body::-webkit-scrollbar-thumb { background: var(--border); }
+
+    .result-card {
+      border: 1px solid var(--border); padding: 10px 12px;
+      background: var(--bg3); border-radius: 2px;
+    }
+    .result-card-title {
+      font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .result-card.vision .result-card-title  { color: var(--purple); }
+    .result-card.audio  .result-card-title  { color: var(--cyan); }
+    .result-card.fusion .result-card-title  { color: var(--green); }
+    .result-card.error  .result-card-title  { color: var(--red); }
+    .result-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
+    .result-row .key { color: var(--text-dim); }
+    .result-row .val { color: var(--text); }
+    .result-row .val.good { color: var(--green); }
+    .result-row .val.warn { color: var(--yellow); }
+    .result-row .val.bad  { color: var(--red); }
+
+    #results-empty { color: var(--text-dim); font-size: 10px; letter-spacing: 2px; padding: 16px 0; text-align: center; }
+
+    /* Fusion burst animation */
+    @keyframes burst {
+      0%   { transform: scale(0.9); opacity: 0; }
+      50%  { transform: scale(1.04); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .result-card.fusion { animation: burst 0.4s ease-out; border-color: var(--green); }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="brand">MIRQAB &nbsp;<span>// VIDEO FUSION DEMO</span></div>
+  <div class="status-bar">
+    <span><span class="conn-dot" id="conn-dot"></span><span id="conn-label">CONNECTING...</span></span>
+    <span id="clock">00:00:00</span>
+  </div>
+</div>
+
+<div id="shell">
+
+  <!-- PREVIEW PANEL -->
+  <div id="preview-panel">
+    <div id="preview-header">
+      <span class="panel-label">VIDEO PREVIEW</span>
+      <span id="video-info" style="font-size:10px;color:var(--text-dim);letter-spacing:1px;"></span>
+    </div>
+    <div id="video-area">
+      <div id="video-placeholder">
+        <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <rect x="2" y="7" width="20" height="14" rx="2"/>
+          <path d="M16 3l4 4-4 4"/>
+          <path d="M8 3L4 7l4 4"/>
+        </svg>
+        <p>NO VIDEO SELECTED</p>
+        <p style="font-size:10px;opacity:0.5;">SELECT A VIDEO FILE FROM THE PANEL</p>
+      </div>
+      <video id="preview-video" controls muted></video>
+
+      <!-- PROCESSING OVERLAY -->
+      <div id="progress-overlay">
+        <div class="spinner"></div>
+        <div id="progress-label">PROCESSING...</div>
+        <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+        <div id="progress-detail" style="font-size:10px;color:var(--text-dim);letter-spacing:1px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTROLS PANEL -->
+  <div id="ctrl-panel">
+
+    <!-- FILE SELECT -->
+    <div class="section">
+      <div class="section-title">VIDEO FILE</div>
+      <div id="drop-zone">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p>DRAG & DROP VIDEO</p>
+        <p class="hint">or click to browse</p>
+      </div>
+      <div id="file-name">—</div>
+      <input type="file" id="file-input" accept="video/*" />
+    </div>
+
+    <!-- VISION UNIT -->
+    <div class="section">
+      <div class="section-title">VISION UNIT <span style="font-size:8px;color:var(--purple);">( YOLO )</span></div>
+      <div class="unit-options" id="vision-options"><div class="unit-loading">[ LOADING... ]</div></div>
+    </div>
+
+    <!-- ACOUSTIC UNIT -->
+    <div class="section">
+      <div class="section-title">ACOUSTIC UNIT <span style="font-size:8px;color:var(--cyan);">( CNN )</span></div>
+      <div class="unit-options" id="acoustic-options"><div class="unit-loading">[ LOADING... ]</div></div>
+    </div>
+
+    <!-- MAX FRAMES -->
+    <div class="section">
+      <div class="section-title">MAX FRAMES TO ANALYSE</div>
+      <div class="slider-row">
+        <input type="range" id="frames-slider" min="5" max="120" value="30" step="5" />
+        <span class="slider-val" id="frames-val">30</span>
+      </div>
+      <div style="font-size:9px;color:var(--text-dim);margin-top:5px;letter-spacing:1px;">
+        Higher = more thorough detection, slower processing
+      </div>
+    </div>
+
+    <!-- PROCESS -->
+    <div class="section">
+      <button class="btn-process" id="btn-process" disabled>&#9654; PROCESS VIDEO</button>
+      <div id="proc-error" style="color:var(--red);font-size:10px;margin-top:6px;display:none;"></div>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="results-panel">
+      <div id="results-header">
+        <span class="panel-label">RESULTS</span>
+        <span id="results-count" style="font-size:10px;color:var(--cyan);">0</span>
+      </div>
+      <div id="results-body">
+        <div id="results-empty">[ NO RESULTS YET ]</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let selectedFile        = null
+  let selectedVisionUnit  = null
+  let selectedAcousticUnit = null
+  let processing          = false
+  let resultCount         = 0
+
+  // ── clock ─────────────────────────────────────────────────────────────────
+  function updateClock() {
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString('en-GB', { hour12: false })
+  }
+  updateClock(); setInterval(updateClock, 1000)
+
+  // ── backend status ─────────────────────────────────────────────────────────
+  async function checkConn() {
+    try { const r = await fetch('/health'); setConn(r.ok) }
+    catch { setConn(false) }
+  }
+  function setConn(ok) {
+    document.getElementById('conn-dot').className = 'conn-dot' + (ok ? ' online' : '')
+    document.getElementById('conn-label').textContent = ok ? 'HQ CONNECTED' : 'HQ OFFLINE'
+  }
+  checkConn(); setInterval(checkConn, 8000)
+
+  // ── file selection ─────────────────────────────────────────────────────────
+  const dropZone  = document.getElementById('drop-zone')
+  const fileInput = document.getElementById('file-input')
+
+  dropZone.addEventListener('click', () => fileInput.click())
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover') })
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'))
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('dragover')
+    const f = e.dataTransfer.files[0]
+    if (f && f.type.startsWith('video/')) setFile(f)
+  })
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0])
+  })
+
+  function setFile(f) {
+    selectedFile = f
+    document.getElementById('file-name').textContent = f.name
+    document.getElementById('video-placeholder').style.display = 'none'
+    const vid = document.getElementById('preview-video')
+    vid.src = URL.createObjectURL(f)
+    vid.classList.add('visible')
+    document.getElementById('video-info').textContent =
+      (f.size / 1024 / 1024).toFixed(1) + ' MB'
+    refreshProcessBtn()
+  }
+
+  // ── unit loading ───────────────────────────────────────────────────────────
+  async function loadUnits() {
+    try {
+      const res   = await fetch('/api/units')
+      const units = await res.json()
+
+      const visionContainer   = document.getElementById('vision-options')
+      const acousticContainer = document.getElementById('acoustic-options')
+      visionContainer.innerHTML   = ''
+      acousticContainer.innerHTML = ''
+
+      const vision   = units.filter(u => u.unit_type === 'vision')
+      const acoustic = units.filter(u => u.unit_type === 'acoustic')
+
+      if (!vision.length) {
+        visionContainer.innerHTML = '<div class="unit-loading">[ NO VISION UNITS ]</div>'
+      } else {
+        vision.forEach((u, i) => {
+          const btn = makeUnitBtn(u, 'vision')
+          if (i === 0) selectUnit(btn, u, 'vision')
+          visionContainer.appendChild(btn)
+        })
+      }
+
+      if (!acoustic.length) {
+        acousticContainer.innerHTML = '<div class="unit-loading">[ NO ACOUSTIC UNITS ]</div>'
+      } else {
+        acoustic.forEach((u, i) => {
+          const btn = makeUnitBtn(u, 'acoustic')
+          if (i === 0) selectUnit(btn, u, 'acoustic')
+          acousticContainer.appendChild(btn)
+        })
+      }
+
+    } catch (err) {
+      document.getElementById('vision-options').innerHTML   = '<div class="unit-loading" style="color:var(--red)">[ LOAD FAILED ]</div>'
+      document.getElementById('acoustic-options').innerHTML = '<div class="unit-loading" style="color:var(--red)">[ LOAD FAILED ]</div>'
+    }
+    refreshProcessBtn()
+  }
+
+  function makeUnitBtn(u, uType) {
+    const btn = document.createElement('button')
+    btn.className    = 'unit-opt'
+    btn.dataset.id   = u.unit_id
+    btn.dataset.lat  = u.lat
+    btn.dataset.lng  = u.lng
+    btn.dataset.type = uType
+    btn.innerHTML    = `<div class="unit-dot"></div>${u.name || u.unit_id}`
+    btn.addEventListener('click', () => {
+      document.querySelectorAll(`.unit-opt[data-type="${uType}"]`)
+        .forEach(b => b.classList.remove(`selected-${uType}`))
+      selectUnit(btn, u, uType)
+    })
+    return btn
+  }
+
+  function selectUnit(btn, u, uType) {
+    btn.classList.add(`selected-${uType}`)
+    if (uType === 'vision') {
+      selectedVisionUnit = { id: u.unit_id, lat: +u.lat, lng: +u.lng }
+    } else {
+      selectedAcousticUnit = { id: u.unit_id, lat: +u.lat, lng: +u.lng }
+    }
+    refreshProcessBtn()
+  }
+
+  // ── frames slider ──────────────────────────────────────────────────────────
+  const framesSlider = document.getElementById('frames-slider')
+  const framesVal    = document.getElementById('frames-val')
+  framesSlider.addEventListener('input', () => {
+    framesVal.textContent = framesSlider.value
+  })
+
+  // ── process button ─────────────────────────────────────────────────────────
+  function refreshProcessBtn() {
+    const btn = document.getElementById('btn-process')
+    btn.disabled = !(selectedFile && selectedVisionUnit && selectedAcousticUnit && !processing)
+  }
+
+  document.getElementById('btn-process').addEventListener('click', processVideo)
+
+  async function processVideo() {
+    if (!selectedFile || !selectedVisionUnit || !selectedAcousticUnit || processing) return
+    processing = true
+    refreshProcessBtn()
+    hideError()
+
+    showProgress('EXTRACTING FRAMES...', 10)
+    const form = new FormData()
+    form.append('video_file',       selectedFile, selectedFile.name)
+    form.append('vision_unit_id',   selectedVisionUnit.id)
+    form.append('acoustic_unit_id', selectedAcousticUnit.id)
+    form.append('max_frames',       framesSlider.value)
+
+    updateProgress('RUNNING MODELS IN PARALLEL...', 40)
+
+    try {
+      const res = await fetch('/api/video-demo/upload', { method: 'POST', body: form })
+      updateProgress('FUSION CHECK...', 85)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }))
+        throw new Error(err.detail || `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      updateProgress('DONE', 100)
+      setTimeout(() => hideProgress(), 600)
+      renderResults(data)
+    } catch (err) {
+      hideProgress()
+      showError(err.message)
+    } finally {
+      processing = false
+      refreshProcessBtn()
+    }
+  }
+
+  // ── progress overlay ───────────────────────────────────────────────────────
+  function showProgress(label, pct) {
+    document.getElementById('progress-overlay').classList.add('active')
+    updateProgress(label, pct)
+  }
+  function updateProgress(label, pct) {
+    document.getElementById('progress-label').textContent = label
+    document.getElementById('progress-bar').style.width   = pct + '%'
+  }
+  function hideProgress() {
+    document.getElementById('progress-overlay').classList.remove('active')
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('proc-error')
+    el.textContent = '⚠ ' + msg
+    el.style.display = 'block'
+  }
+  function hideError() {
+    document.getElementById('proc-error').style.display = 'none'
+  }
+
+  // ── results rendering ──────────────────────────────────────────────────────
+  function renderResults(data) {
+    const body = document.getElementById('results-body')
+    const empty = document.getElementById('results-empty')
+    if (empty) empty.remove()
+
+    resultCount++
+    document.getElementById('results-count').textContent = resultCount
+
+    const ts = new Date().toLocaleTimeString('en-GB', { hour12: false })
+
+    // Vision card
+    const v = data.vision || {}
+    const vCard = card('vision', `⬡ VISION  ·  ${v.unit_id || '—'}  ·  ${ts}`, [
+      ['Frames checked',  v.frames_checked ?? '—', ''],
+      ['With detection',  v.frames_with_detection ?? '—',
+        (v.frames_with_detection > 0 ? 'good' : 'warn')],
+      ['Total detections', v.detections ?? '—',
+        (v.detections > 0 ? 'good' : 'warn')],
+      v.error ? ['Error', v.error, 'bad'] : null,
+    ])
+    body.prepend(vCard)
+
+    // Audio card
+    const a = data.audio || {}
+    const aCard = card('audio', `⬡ AUDIO  ·  ${a.unit_id || '—'}  ·  ${ts}`, [
+      ['Duration',     (a.duration_seconds != null ? a.duration_seconds + 's' : '—'), ''],
+      ['Windows',      a.windows_checked ?? '—', ''],
+      ['Detections',   a.detections ?? '—',
+        (a.detections > 0 ? 'good' : 'warn')],
+      a.error ? ['Error', a.error, 'bad'] : null,
+    ])
+    body.prepend(aCard)
+
+    // Fusion status
+    const bothDetected = (v.detections > 0) && (a.detections > 0)
+    const fusionCard   = card(
+      bothDetected ? 'fusion' : 'result',
+      bothDetected
+        ? '✓ FUSION QUEUED — CHECK DASHBOARD'
+        : '○ NO FUSION — NEEDS BOTH MODELS TO DETECT',
+      [
+        ['Vision',  v.detections + ' detection(s)',  v.detections  > 0 ? 'good' : 'warn'],
+        ['Acoustic', a.detections + ' detection(s)', a.detections > 0 ? 'good' : 'warn'],
+        ['Score threshold', '0.80', ''],
+        ['Message', data.message || '', ''],
+      ]
+    )
+    if (bothDetected) fusionCard.classList.add('fusion')
+    body.prepend(fusionCard)
+  }
+
+  function card(type, title, rows) {
+    const el = document.createElement('div')
+    el.className = `result-card ${type}`
+    el.innerHTML = `<div class="result-card-title">${title}</div>` +
+      rows.filter(Boolean).map(([k, v, cls]) =>
+        `<div class="result-row"><span class="key">${k}</span><span class="val ${cls || ''}">${v}</span></div>`
+      ).join('')
+    return el
+  }
+
+  // ── init ───────────────────────────────────────────────────────────────────
+  loadUnits()
+</script>
+</body>
+</html>

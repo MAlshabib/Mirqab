@@ -1,0 +1,90 @@
+# ── Python ──────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+
+# ── Environment / secrets ────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# ── Databases / local runtime ────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Node / Next.js ───────────────────────────────────────
+node_modules/
+.next/
+.vercel/
+out/
+dist/
+build/
+tsconfig.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── ML models & large binary assets ─────────────────────
+*.pt
+*.pth
+*.onnx
+*.pkl
+*.joblib
+*.h5
+*.weights
+*.bin
+*.engine
+*.safetensors
+
+# ── Media / captures / archives ─────────────────────────
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wav
+*.mp3
+*.flac
+*.pcap
+*.pcapng
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+
+# ── Datasets & training data ─────────────────────────────
+model/datasets/
+model/sound_datasets/
+model/audio_workspace/
+model/audio_model_workspace/
+model/data_workspace/
+model/model_workspace/
+model/cleanup_backups/
+model/test_audio/
+back-end/data/
+back-end/static/detections/
+back-end/rag-documents/
+
+# ── Logs / outputs ───────────────────────────────────────
+logs/
+*.log
+runs/
+outputs/
+checkpoints/
+
+# ── OS / editor artifacts ────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

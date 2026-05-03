@@ -1,0 +1,237 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+* {
+  font-family: 'thmanyah sans', 'Tajawal';
+}
+
+/* Thmanyah Font */
+@font-face {
+  font-family: 'Thmanyah';
+  src: url('https://font.thmanyah.com/Thmanyah-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thmanyah';
+  src: url('https://font.thmanyah.com/Thmanyah-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thmanyah';
+  src: url('https://font.thmanyah.com/Thmanyah-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Military-tech dark GREEN theme */
+  --background: #071a14;
+  --foreground: #e8f5e9;
+  --card: #0d2a20;
+  --card-foreground: #e8f5e9;
+  --popover: #0d2a20;
+  --popover-foreground: #e8f5e9;
+  --primary: #4ade80;
+  --primary-foreground: #071a14;
+  --secondary: #143d2d;
+  --secondary-foreground: #e8f5e9;
+  --muted: #143d2d;
+  --muted-foreground: #7eb89a;
+  --accent: #4ade80;
+  --accent-foreground: #071a14;
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+  --border: #1e5640;
+  --input: #143d2d;
+  --ring: #4ade80;
+  
+  /* Threat colors */
+  --threat-high: #dc2626;
+  --threat-medium: #f59e0b;
+  --threat-low: #4ade80;
+  
+  /* Sensor colors */
+  --sensor-active: #4ade80;
+  --sensor-alert: #dc2626;
+  
+  /* Chart colors */
+  --chart-1: #4ade80;
+  --chart-2: #22d3ee;
+  --chart-3: #f59e0b;
+  --chart-4: #dc2626;
+  --chart-5: #a78bfa;
+  
+  --radius: 0.625rem;
+  --sidebar: #051510;
+  --sidebar-foreground: #e8f5e9;
+  --sidebar-primary: #4ade80;
+  --sidebar-primary-foreground: #071a14;
+  --sidebar-accent: #143d2d;
+  --sidebar-accent-foreground: #e8f5e9;
+  --sidebar-border: #1e5640;
+  --sidebar-ring: #4ade80;
+}
+
+@theme inline {
+  --font-sans: 'Thmanyah', 'Arial', sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* Custom colors */
+  --color-threat-high: var(--threat-high);
+  --color-threat-medium: var(--threat-medium);
+  --color-threat-low: var(--threat-low);
+  --color-sensor-active: var(--sensor-active);
+  --color-sensor-alert: var(--sensor-alert);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Leaflet overrides for dark green theme */
+.leaflet-container {
+  background: #071a14 !important;
+  font-family: 'Thmanyah', sans-serif !important;
+}
+
+.leaflet-tile-pane {
+  filter: brightness(0.4) sepia(1) hue-rotate(90deg) saturate(0.5);
+}
+
+.leaflet-control-zoom a {
+  background: #0d2a20 !important;
+  color: #e8f5e9 !important;
+  border-color: #1e5640 !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: #143d2d !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #0d2a20 !important;
+  color: #e8f5e9 !important;
+  border-radius: 0.625rem !important;
+  border: 1px solid #1e5640 !important;
+}
+
+.leaflet-popup-tip {
+  background: #0d2a20 !important;
+}
+
+.leaflet-popup-close-button {
+  color: #7eb89a !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d2a20;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e5640;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2a7a5a;
+}
+
+/* Pulse animation for active threats */
+@keyframes threat-pulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 0 12px rgba(220, 38, 38, 0);
+  }
+}
+
+.threat-pulse {
+  animation: threat-pulse 1.5s ease-in-out infinite;
+}
+
+/* Glow effect for active sensors */
+@keyframes sensor-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px 2px rgba(74, 222, 128, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(74, 222, 128, 0.6);
+  }
+}
+
+.sensor-glow {
+  animation: sensor-glow 2s ease-in-out infinite;
+}
+
+/* Alert glow */
+@keyframes alert-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px 2px rgba(220, 38, 38, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px 6px rgba(220, 38, 38, 0.8);
+  }
+}
+
+.alert-glow {
+  animation: alert-glow 1s ease-in-out infinite;
+}
