@@ -1,6 +1,6 @@
 # Mirqab — Real-Time Aerial Threat Detection & Sensor Fusion System
 
-> **مراقب** (Mirqab) — Arabic for *Observer* or *Sentinel*
+> **مرقاب** (Mirqab) — Arabic for *Observer* or *Sentinel*
 
 Mirqab is an end-to-end situational awareness platform for early-warning airspace monitoring. It fuses multi-modal sensor data — computer vision and acoustic classification — from distributed field units into a unified threat picture delivered to a real-time command dashboard. The system is designed for low-altitude aerial threat detection (UAVs, aircraft) with support for NATO-standard C2 handoff protocols.
 
