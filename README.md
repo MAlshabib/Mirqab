@@ -851,4 +851,4 @@ This project is developed as a specialized tactical awareness system. All model 
 
 ---
 
-*Built by Mohammed Alshabib*
+*Built by Mirqab Team - Defensethon*
