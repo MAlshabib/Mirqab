@@ -107,7 +107,7 @@ Mirqab is an end-to-end situational awareness platform for early-warning airspac
 
 ---
 
-## AI & ML Models
+## AI & ML  Models
 
 ### Vision Model — YOLOv8m (Fine-tuned)
 
