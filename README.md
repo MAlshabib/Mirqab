@@ -1,20 +1,40 @@
-# Mirqab — Real-Time Aerial Threat Detection & Sensor Fusion System
+# Mirqab: Real-Time Aerial Threat Detection & Sensor Fusion System
 
-> **مرقاب** (Mirqab) — Arabic for *Observer* or *Sentinel*
+<div align="center">
 
-Mirqab is an end-to-end situational awareness platform for early-warning airspace monitoring. It fuses multi-modal sensor data — computer vision and acoustic classification — from distributed field units into a unified threat picture delivered to a real-time command dashboard. The system is designed for low-altitude aerial threat detection (UAVs, aircraft) with support for NATO-standard C2 handoff protocols.
+[![1st Place](https://img.shields.io/badge/%F0%9F%8F%86_Defensethon-1st_Place-FFD700?style=for-the-badge&labelColor=1a1a1a)](#-award)
+![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat&logo=fastapi&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16.2-000000?style=flat&logo=next.js&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.1+-EE4C2C?style=flat&logo=pytorch&logoColor=white)
+![License](https://img.shields.io/badge/License-Proprietary-red?style=flat)
+
+</div>
+
+> **مرقاب** (Mirqab) - Arabic for *Observer* or *Sentinel*
+
+Mirqab is an end-to-end situational awareness platform for early-warning airspace monitoring. It fuses multi-modal sensor data (computer vision and acoustic classification) from distributed field units into a unified threat picture delivered to a real-time command dashboard. The system is designed for low-altitude aerial threat detection (UAVs, aircraft) with support for NATO-standard C2 handoff protocols.
+
+---
+
+## 🏆 Award
+
+**1st Place - Defensethon**
+
+Mirqab took first place at Defensethon, recognized for its real-time multi-modal sensor fusion approach and full-stack execution from field-unit ingestion through to NATO-standard C2 export.
 
 ---
 
 ## Table of Contents
 
+- [Award](#-award)
 - [System Architecture](#system-architecture)
 - [Key Features](#key-features)
 - [AI & ML Models](#ai--ml-models)
-  - [Vision Model — YOLOv8m (Fine-tuned)](#vision-model--yolov8m-fine-tuned)
-  - [Audio Model — MirqabCNN (Custom)](#audio-model--mirqabcnn-custom)
+  - [Vision Model: YOLOv8m (Fine-tuned)](#vision-model-yolov8m-fine-tuned)
+  - [Audio Model: MirqabCNN (Custom)](#audio-model-mirqabcnn-custom)
   - [Sensor Fusion Engine](#sensor-fusion-engine)
-  - [RAG Assistant — Qwen2.5 + Qwen3 Embeddings](#rag-assistant--qwen25--qwen3-embeddings)
+  - [RAG Assistant: Qwen2.5 + Qwen3 Embeddings](#rag-assistant-qwen25--qwen3-embeddings)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
@@ -36,55 +56,48 @@ Mirqab is an end-to-end situational awareness platform for early-warning airspac
 
 ## System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         FIELD LAYER                                  │
-│                                                                       │
-│   ┌──────────────┐        ┌──────────────┐        ┌──────────────┐  │
-│   │  Vision Unit │        │  Vision Unit │        │ Acoustic Unit│  │
-│   │  (Camera)    │        │  (Camera)    │        │  (Mic Array) │  │
-│   │  vision-01   │        │  vision-02   │        │ acoustic-01  │  │
-│   └──────┬───────┘        └──────┬───────┘        └──────┬───────┘  │
-│          │ JPEG frames           │ JPEG frames           │ PCM audio │
-│          └───────────────────────┴───────────────────────┘           │
-│                                  │                                    │
-│                         WebSocket Feed                               │
-└──────────────────────────────────┼──────────────────────────────────┘
-                                   │
-┌──────────────────────────────────▼──────────────────────────────────┐
-│                         BACKEND (FastAPI)                             │
-│                                                                       │
-│   ┌─────────────────┐    ┌─────────────────┐    ┌────────────────┐  │
-│   │ Frame Processor │    │ Audio Processor  │    │  C2 Gateway    │  │
-│   │  YOLOv8m +      │    │  MirqabCNN +     │    │  CoT / ASTERIX │  │
-│   │  BoTSORT        │    │  Mel-Spectrogram │    │  CAT062 Export │  │
-│   └────────┬────────┘    └────────┬─────────┘    └───────▲────────┘  │
-│            │  vision detections   │ acoustic detections   │           │
-│            └──────────┬───────────┘                       │           │
-│                       │                                   │           │
-│               ┌───────▼────────┐                          │           │
-│               │  Fusion Engine │──── fused event ─────────┘           │
-│               │  0.6v + 0.4a   │                                      │
-│               │  threshold 0.8 │                                      │
-│               └───────┬────────┘                                      │
-│                       │                                               │
-│               ┌───────▼────────┐    ┌──────────────────┐             │
-│               │   SQLite DB    │    │  RAG Assistant   │             │
-│               │  (SQLModel)    │    │  Qwen2.5:14b     │             │
-│               └───────┬────────┘    └──────────────────┘             │
-│                       │  WebSocket broadcast /ws/hq                   │
-└───────────────────────┼─────────────────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────────────────┐
-│                      FRONTEND (Next.js)                               │
-│                                                                       │
-│   ┌────────────────┐  ┌────────────────┐  ┌────────────────────┐    │
-│   │   Dashboard    │  │  C2 Console    │  │   RAG Assistant    │    │
-│   │  Leaflet Map   │  │  Track Mgmt    │  │  Arabic / English  │    │
-│   │  Alerts Panel  │  │  CoT Export    │  │  Suggested Queries │    │
-│   │  Sensor Status │  │  ASTERIX Exp.  │  │  Source Citations  │    │
-│   └────────────────┘  └────────────────┘  └────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph FIELD["FIELD LAYER"]
+        direction LR
+        V1["Vision Unit (Camera)<br/>vision-01"]
+        V2["Vision Unit (Camera)<br/>vision-02"]
+        A1["Acoustic Unit (Mic Array)<br/>acoustic-01"]
+    end
+
+    V1 -- JPEG frames --> WS["WebSocket Feed"]
+    V2 -- JPEG frames --> WS
+    A1 -- PCM audio --> WS
+
+    subgraph BACKEND["BACKEND (FastAPI)"]
+        direction TB
+        FP["Frame Processor<br/>YOLOv8m + BoTSORT"]
+        AP["Audio Processor<br/>MirqabCNN + Mel-Spectrogram"]
+        FE["Fusion Engine<br/>0.6 x Vision + 0.4 x Acoustic<br/>threshold 0.8"]
+        DB[("SQLite DB<br/>SQLModel")]
+        RAG["RAG Assistant<br/>Qwen2.5:14b"]
+        C2G["C2 Gateway<br/>CoT / ASTERIX CAT062"]
+
+        FP -- vision detections --> FE
+        AP -- acoustic detections --> FE
+        FE -- fused event --> DB
+        FE -- fused event --> C2G
+        DB --> RAG
+    end
+
+    WS --> FP
+    WS --> AP
+
+    subgraph FRONTEND["FRONTEND (Next.js)"]
+        direction LR
+        DASH["Dashboard<br/>Leaflet Map / Alerts Panel"]
+        C2C["C2 Console<br/>Track Mgmt / CoT / ASTERIX Export"]
+        RAGUI["RAG Assistant<br/>Arabic / English"]
+    end
+
+    DB -- "WebSocket broadcast /ws/hq" --> DASH
+    DB -- "WebSocket broadcast /ws/hq" --> C2C
+    RAG --> RAGUI
 ```
 
 ---
@@ -107,9 +120,9 @@ Mirqab is an end-to-end situational awareness platform for early-warning airspac
 
 ---
 
-## AI & ML  Models
+## AI & ML Models
 
-### Vision Model — YOLOv8m (Fine-tuned)
+### Vision Model: YOLOv8m (Fine-tuned)
 
 Mirqab uses a fine-tuned **YOLOv8m** (You Only Look Once, version 8, medium variant) as its primary object detection engine. The model was trained on a curated aerial-threat dataset containing imagery of civilian aircraft, military aircraft, UAVs/drones, and birds.
 
@@ -148,59 +161,49 @@ The pipeline produces a clean dataset targeting four base classes: `civilian_air
 
 **How it works in the pipeline:**
 
-```
-Camera captures JPEG frame
-        │
-        ▼
-frame_processor.process_frame()
-        │
-        ▼
-YOLOv8m inference → bounding boxes + class + confidence
-        │
-        ▼
-BoTSORT tracker assigns persistent IDs to objects
-        │
-        ▼
-Filter by confidence ≥ 0.85 + per-label cooldown
-        │
-        ▼
-Save annotated snapshot → /static/detections/{uuid}.jpg
-        │
-        ▼
-Emit detection to Fusion Engine
+```mermaid
+flowchart TD
+    A["Camera captures JPEG frame"] --> B["frame_processor.process_frame()"]
+    B --> C["YOLOv8m inference -> bounding boxes + class + confidence"]
+    C --> D["BoTSORT tracker assigns persistent IDs to objects"]
+    D --> E["Filter by confidence >= 0.85 + per-label cooldown"]
+    E --> F["Save annotated snapshot -> /static/detections/{uuid}.jpg"]
+    F --> G["Emit detection to Fusion Engine"]
 ```
 
 ---
 
-### Audio Model — MirqabCNN (Custom)
+### Audio Model: MirqabCNN (Custom)
 
 The **MirqabCNN** is a purpose-built convolutional neural network designed to classify aerial sound signatures from microphone input. It was trained on Mel-spectrogram representations of UAV propeller noise and aircraft engine sounds.
 
 **Model Architecture:**
 
-```
-Input: Mel-spectrogram (1 × 128 × T) — mono audio at 16 kHz
-         │
-         ▼
-ConvBlock 1: Conv2d(1→32, 3×3, bias=False) → BatchNorm2d → ReLU → MaxPool2d(2,2)
-         │
-         ▼
-ConvBlock 2: Conv2d(32→64, 3×3, bias=False) → BatchNorm2d → ReLU → MaxPool2d(2,2)
-         │
-         ▼
-ConvBlock 3: Conv2d(64→128, 3×3, bias=False) → BatchNorm2d → ReLU → MaxPool2d(2,2)
-         │
-         ▼
-ConvBlock 4: Conv2d(128→256, 3×3, bias=False) → BatchNorm2d → ReLU → MaxPool2d(2,2)
-         │
-         ▼
-Global Average Pooling → Flatten (256-dim)
-         │
-         ▼
-Dropout → Linear(256 → 3)
-         │
-         ▼
-Output: softmax over [uav, aircraft, background]
+```mermaid
+flowchart TD
+    IN["Input: Mel-spectrogram (1 x 128 x T)<br/>mono audio at 16 kHz"] --> CB1
+    subgraph CB1["ConvBlock 1"]
+        direction LR
+        C1["Conv2d 1->32, 3x3<br/>bias=False"] --> BN1["BatchNorm2d"] --> R1["ReLU"] --> P1["MaxPool2d(2,2)"]
+    end
+    CB1 --> CB2
+    subgraph CB2["ConvBlock 2"]
+        direction LR
+        C2["Conv2d 32->64, 3x3<br/>bias=False"] --> BN2["BatchNorm2d"] --> R2["ReLU"] --> P2["MaxPool2d(2,2)"]
+    end
+    CB2 --> CB3
+    subgraph CB3["ConvBlock 3"]
+        direction LR
+        C3["Conv2d 64->128, 3x3<br/>bias=False"] --> BN3["BatchNorm2d"] --> R3["ReLU"] --> P3["MaxPool2d(2,2)"]
+    end
+    CB3 --> CB4
+    subgraph CB4["ConvBlock 4"]
+        direction LR
+        C4["Conv2d 128->256, 3x3<br/>bias=False"] --> BN4["BatchNorm2d"] --> R4["ReLU"] --> P4["MaxPool2d(2,2)"]
+    end
+    CB4 --> GAP["Global Average Pooling -> Flatten (256-dim)"]
+    GAP --> DR["Dropout -> Linear(256 -> 3)"]
+    DR --> OUT["Output: softmax over [uav, aircraft, background]"]
 ```
 
 **Audio Processing Details:**
@@ -222,27 +225,14 @@ Output: softmax over [uav, aircraft, background]
 
 **How it works in the pipeline:**
 
-```
-Microphone captures PCM audio (16 kHz, mono)
-        │
-        ▼
-Ring buffer accumulates 1-second windows with 0.5s stride
-        │
-        ▼
-Compute Mel-spectrogram → (1, 128, ~96) tensor
-        │
-        ▼
-Z-score normalization
-        │
-        ▼
-MirqabCNN inference → class probabilities
-        │
-        ▼
-Filter by confidence ≥ 0.70, ignore "background"
-Apply per-label cooldown (3s)
-        │
-        ▼
-Emit acoustic detection to Fusion Engine
+```mermaid
+flowchart TD
+    A["Microphone captures PCM audio (16 kHz, mono)"] --> B["Ring buffer accumulates 1-second windows<br/>with 0.5s stride"]
+    B --> C["Compute Mel-spectrogram -> (1, 128, ~96) tensor"]
+    C --> D["Z-score normalization"]
+    D --> E["MirqabCNN inference -> class probabilities"]
+    E --> F["Filter by confidence >= 0.70, ignore 'background'<br/>Apply per-label cooldown (3s)"]
+    F --> G["Emit acoustic detection to Fusion Engine"]
 ```
 
 **Training Pipeline:**
@@ -263,7 +253,23 @@ The fusion engine (`back-end/app/fusion.py`) is the core decision-making compone
 **Fusion Formula:**
 
 ```
-Fused Score = (0.6 × Vision Confidence) + (0.4 × Acoustic Confidence)
+Fused Score = (0.6 x Vision Confidence) + (0.4 x Acoustic Confidence)
+```
+
+**Decision Flow:**
+
+```mermaid
+flowchart TD
+    V["Vision detection"] --> M{"Acoustic detection<br/>within 15s window?"}
+    A["Acoustic detection"] --> M
+    M -- "No match after 15s" --> DISC1["Discard (pending buffer cleanup)"]
+    M -- "Same-label match" --> SCORE["Fused Score =<br/>0.6 x Vision + 0.4 x Acoustic"]
+    M -- "Cross-label fallback<br/>(vision label wins)" --> SCORE
+    SCORE --> T{"Fused Score >= 0.80?"}
+    T -- No --> DISC2["Discard (insufficient confidence)"]
+    T -- Yes --> COOL{"Fusion cooldown<br/>elapsed (10s)?"}
+    COOL -- No --> DISC3["Discard (cooldown active)"]
+    COOL -- Yes --> ALERT["Emit threat alert<br/>Save to DB + broadcast to HQ clients"]
 ```
 
 **Decision Rules:**
@@ -286,7 +292,7 @@ The engine matches vision and acoustic detections within a **15-second temporal 
 |--------|-----------|-------------|
 | Vision | `uav_threat` | `uav` |
 | Vision | `aircraft` | `aircraft` |
-| Vision | `bird` | *(dropped — not threat-relevant)* |
+| Vision | `bird` | *(dropped - not threat-relevant)* |
 | Acoustic | `uav` | `uav` |
 | Acoustic | `aircraft` | `aircraft` |
 | Acoustic | `background` | *(dropped)* |
@@ -298,9 +304,9 @@ The engine matches vision and acoustic detections within a **15-second temporal 
 
 ---
 
-### RAG Assistant — Qwen2.5 + Qwen3 Embeddings
+### RAG Assistant: Qwen2.5 + Qwen3 Embeddings
 
-Mirqab includes an AI-powered operator assistant that answers questions about the current threat picture, sensor health, incident history, and operational procedures. It runs **entirely locally** via Ollama — no cloud API calls.
+Mirqab includes an AI-powered operator assistant that answers questions about the current threat picture, sensor health, incident history, and operational procedures. It runs **entirely locally** via Ollama, with no cloud API calls.
 
 **Models:**
 
@@ -311,33 +317,15 @@ Mirqab includes an AI-powered operator assistant that answers questions about th
 
 **Architecture:**
 
-```
-Operator query (Arabic or English)
-        │
-        ▼
-Domain Guard — blocks tactical targeting / weapon-related queries
-        │
-        ▼
-Route to: RAG retrieval  OR  DB analytics query
-        │                          │
-   Vector search               SQLite query
-   Top-5 chunks                (threat stats,
-   from knowledge base          sensor health,
-   (SOPs, manuals)               daily counts)
-        │                          │
-        └──────────┬───────────────┘
-                   │
-                   ▼
-        Qwen2.5:14b-instruct
-        (Temperature = 0.1 for accuracy)
-        System prompt enforces:
-          - Mirqab scope only
-          - No invented statistics
-          - Bilingual (auto-detect)
-          - Cite sources
-                   │
-                   ▼
-        Answer + source citations → UI
+```mermaid
+flowchart TD
+    Q["Operator query (Arabic or English)"] --> G["Domain Guard<br/>blocks tactical targeting / weapon-related queries"]
+    G --> R{"Route query"}
+    R -- "RAG retrieval" --> VS["Vector search<br/>Top-5 chunks from knowledge base<br/>(SOPs, manuals)"]
+    R -- "DB analytics query" --> SQL["SQLite query<br/>(threat stats, sensor health, daily counts)"]
+    VS --> LLM
+    SQL --> LLM["Qwen2.5:14b-instruct<br/>Temperature = 0.1 for accuracy<br/>System prompt: Mirqab scope only,<br/>no invented statistics, bilingual, cite sources"]
+    LLM --> OUT["Answer + source citations -> UI"]
 ```
 
 **Domain Restrictions (System Prompt):**
@@ -617,7 +605,7 @@ Full interactive documentation is available at `http://localhost:8000/docs` (Swa
 
 ## WebSocket Protocol
 
-### `/ws/hq` — HQ Broadcast
+### `/ws/hq` - HQ Broadcast
 
 All connected dashboard clients receive threat events and unit status changes in real-time.
 
@@ -649,11 +637,11 @@ All connected dashboard clients receive threat events and unit status changes in
 }
 ```
 
-### `/ws/unit/{unit_id}/feed` — Field Unit Video Feed (inbound)
+### `/ws/unit/{unit_id}/feed` - Field Unit Video Feed (inbound)
 
 Field cameras send JPEG frames as binary WebSocket messages to this endpoint. The backend decodes, runs YOLO inference, and relays to viewers.
 
-### `/ws/unit/{unit_id}/view` — HQ Video Viewer (outbound)
+### `/ws/unit/{unit_id}/view` - HQ Video Viewer (outbound)
 
 HQ clients subscribe to receive annotated JPEG frames from a specific field unit. Frames are forwarded as binary messages at the camera's capture rate.
 
@@ -827,7 +815,7 @@ A conversational interface supporting Arabic and English. Operators can ask natu
 
 ### Simulator Mode
 
-Toggle the simulator from the sidebar to inject synthetic detections without physical sensors — ideal for operator training, UI testing, and demonstrations.
+Toggle the simulator from the sidebar to inject synthetic detections without physical sensors, ideal for operator training, UI testing, and demonstrations.
 
 ---
 
@@ -851,4 +839,4 @@ This project is developed as a specialized tactical awareness system. All model 
 
 ---
 
-*Built by Mirqab Team - Defensethon*
+*Built by the Mirqab Team - 🏆 1st Place, Defensethon*
